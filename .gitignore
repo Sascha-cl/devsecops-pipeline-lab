@@ -1,0 +1,33 @@
+# Scan-Ergebnisse werden als CI-Artefakte veröffentlicht, nicht eingecheckt.
+# Grund steht im README unter "Warum die Reports nicht im Repo liegen".
+reports/
+*.sarif
+zap-*.json
+zap-*.html
+zap-*.md
+trivy-report.json
+dependency-check-report.*
+
+# Build- und Abhängigkeitsverzeichnisse
+node_modules/
+target/
+dist/
+build/
+*.tar
+
+# Lokale Umgebung und Zugangsdaten
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+id_rsa*
+known_hosts
+
+# IDE und Betriebssystem
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini
