@@ -1,0 +1,8 @@
+# Alles mit LF im Repo speichern, unabhaengig vom Betriebssystem des Autors.
+# Die Workflows laufen auf Linux-Runnern. Ein Shell-Skript mit CRLF scheitert
+# dort mit "bad interpreter", und der Fehler ist beim Lesen nicht sichtbar.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.pdf binary
