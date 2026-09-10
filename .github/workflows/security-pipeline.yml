@@ -168,3 +168,71 @@ jobs:
           path: reports/trivy-report.json
           if-no-files-found: warn
           retention-days: 30
+
+  # ---------------------------------------------------------------------
+  # DAST: prueft die laufende Anwendung von aussen
+  # ---------------------------------------------------------------------
+  dast:
+    name: DAST (OWASP ZAP Baseline)
+    runs-on: ubuntu-latest
+
+    # Kein "services:" Block. Die eigentlichen Job-Schritte laufen direkt auf
+    # dem Runner, ein per "docker run" gestarteter ZAP-Container haengt dann
+    # nicht automatisch im selben Netz wie ein Service-Container. Deshalb
+    # Netz, Ziel und Scanner von Hand aufsetzen. Das ist genau der Aufbau,
+    # der lokal getestet wurde.
+    steps:
+      - name: Netzwerk und Zielcontainer starten
+        run: |
+          docker network create zapnet
+          docker run -d --name juice-shop --network zapnet "$TARGET_IMAGE"
+
+      - name: Warten bis das Ziel antwortet
+        run: |
+          # Echter Health-Check statt blindem sleep. Startet der Container
+          # nicht, bricht der Schritt hier ehrlich ab, statt ZAP ins Leere
+          # scannen und einen leeren Report als Erfolg verkaufen zu lassen.
+          docker run --rm --network zapnet curlimages/curl:latest \
+            sh -c 'for i in $(seq 1 40); do
+                     if curl -sf -o /dev/null http://juice-shop:3000; then
+                       echo "Ziel erreichbar nach $((i*5))s"; exit 0;
+                     fi
+                     echo "noch nicht erreichbar ($i/40)"; sleep 5;
+                   done
+                   echo "FEHLER: Ziel nach 200s nicht erreichbar"; exit 1'
+
+      - name: ZAP Baseline Scan
+        run: |
+          mkdir -p reports
+          chmod 777 reports
+          # ZAP laeuft als non-root und schreibt nach /zap/wrk. Der Mount
+          # dorthin braucht deshalb Schreibrechte fuer beliebige UID.
+          # -I setzt den Exit-Code nicht auf Fehler, wenn nur Warnungen
+          # gefunden werden. Der Juice Shop ist absichtlich verwundbar,
+          # Warnungen sind hier das erwartete Ergebnis, kein Pipeline-Fehler.
+          docker run --rm --network zapnet \
+            -v "$PWD/reports:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://juice-shop:3000 \
+              -J zap-baseline.json \
+              -r zap-baseline.html \
+              -m 2 \
+              -I
+
+      - name: Aufräumen
+        if: always()
+        run: |
+          docker rm -f juice-shop || true
+          docker network rm zapnet || true
+
+      - name: Reports als Artefakt sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            reports/zap-baseline.json
+            reports/zap-baseline.html
+          if-no-files-found: warn
+          retention-days: 30

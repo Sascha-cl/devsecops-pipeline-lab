@@ -37,14 +37,14 @@ push / pull_request / cron
         ├─ secret detection ....... Gitleaks über die volle Git-Historie
         ├─ sast ................... Semgrep gegen den Quellcode des Ziels
         ├─ container scan ......... Trivy gegen das Image des Ziels
-        └─ dast ................... ZAP gegen Service-Container  (offen)
+        └─ dast ................... ZAP gegen den laufenden Container
                                           │
                                     juice-shop:3000
                                     (öffentliches Upstream-Image,
                                      wird referenziert, nicht kopiert)
 ```
 
-Die drei aktiven Jobs laufen parallel und ohne `needs`. GitHub Actions kennt keine Stages wie GitLab, eine Reihenfolge entsteht nur über Abhängigkeiten. Hier ist keine nötig, denn die Scanner sind unabhängig und sollen sich nicht gegenseitig blockieren, wenn einer rot wird.
+Die vier Jobs laufen parallel und ohne `needs`. GitHub Actions kennt keine Stages wie GitLab, eine Reihenfolge entsteht nur über Abhängigkeiten. Hier ist keine nötig, denn die Scanner sind unabhängig und sollen sich nicht gegenseitig blockieren, wenn einer rot wird.
 
 ## Secret Detection
 
@@ -153,12 +153,42 @@ done
 
 Ein `sleep 15` hätte die Pipeline ebenfalls grün gemacht. Startet der Container aber nicht, scannt ZAP ins Leere, findet nichts und meldet Erfolg. Das Ergebnis wäre ein grüner Haken ohne Aussage, und das ist schlechter als ein roter Job, weil niemand mehr nachsieht. Der Job bricht in dem Fall ab.
 
+### Was der DAST-Lauf meldet
+
+ZAP Baseline gegen den laufenden Container, ohne aktive Angriffe, nur Crawl und passive Prüfung:
+
+```
+FAIL-NEW: 0    WARN-NEW: 9    PASS: 58
+```
+
+Die neun Warnungen sind überwiegend fehlende Sicherheitsheader: keine Content Security Policy, fehlende Cross-Origin-Header, eine verwundbare JS-Bibliothek. Nichts davon ist spektakulär, und genau das ist der Punkt einer Baseline. Sie prüft, was ein Angreifer ohne einen einzigen Angriff schon sieht.
+
+## Wenn drei Scanner auf dieselbe Datei zeigen
+
+Beim Crawlen ist ZAP über diese URL gestolpert:
+
+```
+http://juice-shop:3000/juice-shop/build/routes/fileServer.js:59:18
+```
+
+Das ist kein normaler Pfad, das ist ein interner Dateipfad, den die Anwendung in einer Fehlermeldung preisgegeben hat. Interessant wird er im Zusammenhang mit der statischen Analyse. Semgrep hatte `fileServer.ts` als Path-Traversal-Stelle markiert. Derselbe Dateiname taucht jetzt im laufenden Betrieb wieder auf, diesmal weil ein Stacktrace nach außen dringt.
+
+Drei Blickwinkel auf dieselbe Komponente:
+
+| Quelle | Aussage über `fileServer` |
+|---|---|
+| SAST (Semgrep) | im Quellcode steckt eine Path-Traversal-Lücke |
+| DAST (ZAP) | die laufende App verrät den internen Pfad der Datei über eine Fehlermeldung |
+| eigene Praxis (PortSwigger) | dieselbe Schwachstellenklasse von Hand ausgenutzt, `../../../etc/passwd` |
+
+Ein Scanner allein liefert eine Zeile. Erst die Kombination ergibt eine Spur: eine Datei, die statisch verdächtig ist, im Betrieb Interna leakt und zu einer Angriffsklasse gehört, die ich selbst durchgespielt habe. Diese Findings zu verbinden ist die Arbeit, die kein einzelnes Werkzeug abnimmt.
+
 ## Fahrplan
 
 - [x] Repo, Lizenz, Secret Detection mit Gitleaks
 - [x] Semgrep gegen den Quellcode des Scan-Ziels
 - [x] Trivy gegen das Container-Image, mit Auswertung statt Gate
-- [ ] ZAP-Baseline gegen den Service-Container
+- [x] ZAP-Baseline gegen den laufenden Container
 - [ ] Vergleich GitLab CI gegen GitHub Actions als eigener Abschnitt
 
 ## Lizenz
