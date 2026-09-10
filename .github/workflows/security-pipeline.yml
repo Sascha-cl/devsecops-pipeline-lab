@@ -1,0 +1,170 @@
+name: Security Pipeline
+
+# Entspricht den Stages der urspruenglichen GitLab-Pipeline. GitHub Actions
+# kennt keine Stages, sondern Jobs, die standardmaessig parallel laufen.
+# Eine Reihenfolge entsteht nur ueber "needs". Hier ist keine noetig: die drei
+# Scanner sind voneinander unabhaengig und sollen sich nicht gegenseitig
+# blockieren, wenn einer rot wird.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Oeffentliches Referenzziel. Der OWASP Juice Shop ist absichtlich
+  # verwundbar und dient hier als Scan-Objekt, nicht als eigener Code.
+  TARGET_IMAGE: bkimminich/juice-shop:latest
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Secret Detection: prueft dieses Repo
+  # ---------------------------------------------------------------------
+  secret-detection:
+    name: Secret Detection (Gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          # Volle Historie. Ohne das sieht Gitleaks nur den letzten Commit,
+          # und ein Secret das vor zehn Commits entfernt wurde steht trotzdem
+          # noch in der Historie und ist weiterhin abrufbar.
+          fetch-depth: 0
+
+      - name: Gitleaks über die Git-Historie laufen lassen
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:latest \
+            git /repo \
+            --report-format json \
+            --report-path /repo/reports/gitleaks-report.json \
+            --redact \
+            --verbose \
+            --exit-code 1
+
+      - name: Report als Artefakt sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: reports/gitleaks-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ---------------------------------------------------------------------
+  # SAST: prueft den Quellcode des Zielprojekts
+  # ---------------------------------------------------------------------
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Quellcode des Scan-Ziels holen
+        uses: actions/checkout@v4
+        with:
+          repository: juice-shop/juice-shop
+          path: target-src
+          # Flacher Klon. Fuer statische Analyse zaehlt der aktuelle Stand,
+          # nicht die Historie. Das Repo hat ueber 20.000 Commits.
+          fetch-depth: 1
+
+      - name: Semgrep laufen lassen
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$PWD:/src" \
+            semgrep/semgrep:latest \
+            semgrep scan \
+              --config p/security-audit \
+              --config p/javascript \
+              --sarif \
+              --output /src/reports/semgrep.sarif \
+              --metrics off \
+              --no-git-ignore \
+              /src/target-src
+        # Der Juice Shop ist absichtlich verwundbar. Ein Fehlschlag hier waere
+        # das erwartete Ergebnis und keine Information, deshalb kein Gate.
+        continue-on-error: true
+
+      - name: Trefferzahl ausgeben
+        if: always()
+        run: |
+          if [ -f reports/semgrep.sarif ]; then
+            COUNT=$(python3 -c "import json,sys; d=json.load(open('reports/semgrep.sarif')); print(sum(len(r.get('results',[])) for r in d.get('runs',[])))")
+            echo "Semgrep-Findings: $COUNT" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Kein SARIF-Report erzeugt" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report als Artefakt sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: reports/semgrep.sarif
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ---------------------------------------------------------------------
+  # Container Scan: prueft das fertige Image des Zielprojekts
+  # ---------------------------------------------------------------------
+  container-scan:
+    name: Container Scan (Trivy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trivy gegen das Zielimage
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$PWD/reports:/out" \
+            -v trivy-cache:/root/.cache \
+            aquasec/trivy:latest \
+            image "$TARGET_IMAGE" \
+            --format json \
+            --output /out/trivy-report.json \
+            --severity CRITICAL,HIGH,MEDIUM,LOW \
+            --scanners vuln \
+            --exit-code 0
+
+      - name: Zusammenfassung als Tabelle
+        run: |
+          docker run --rm \
+            -v trivy-cache:/root/.cache \
+            aquasec/trivy:latest \
+            image "$TARGET_IMAGE" \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --scanners vuln \
+            --exit-code 0 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Bewusst kein Gate auf dem Scan-Ziel.
+      #
+      # In der urspruenglichen Pipeline stand hier:
+      #   trivy image --pkg-types os --severity CRITICAL --ignore-unfixed --exit-code 1
+      #
+      # Das ergibt Sinn fuer Code, den man selbst kontrolliert und fixen kann.
+      # Auf einer absichtlich verwundbaren Referenzanwendung wuerde es die
+      # Pipeline dauerhaft rot faerben, ohne dass jemand etwas daran aendern
+      # koennte. Ein Gate, das immer ausloest, wird ignoriert und ist damit
+      # schlechter als keins. Die Trennung zwischen "absichtlich unsicher" und
+      # "unabsichtlich angreifbar" muss die Pipeline abbilden.
+
+      - name: Report als Artefakt sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: reports/trivy-report.json
+          if-no-files-found: warn
+          retention-days: 30

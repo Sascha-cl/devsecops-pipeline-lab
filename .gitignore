@@ -8,6 +8,10 @@ zap-*.md
 trivy-report.json
 dependency-check-report.*
 
+# Quellcode des Scan-Ziels. Wird in der CI frisch geklont und gehört
+# nicht in dieses Repo, sonst läge hier fremder Code unter fremder Lizenz.
+target-src/
+
 # Build- und Abhängigkeitsverzeichnisse
 node_modules/
 target/
