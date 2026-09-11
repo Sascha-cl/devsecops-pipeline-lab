@@ -1,10 +1,5 @@
 name: Security Pipeline
 
-# Entspricht den Stages der urspruenglichen GitLab-Pipeline. GitHub Actions
-# kennt keine Stages, sondern Jobs, die standardmaessig parallel laufen.
-# Eine Reihenfolge entsteht nur ueber "needs". Hier ist keine noetig: die drei
-# Scanner sind voneinander unabhaengig und sollen sich nicht gegenseitig
-# blockieren, wenn einer rot wird.
 on:
   push:
     branches: [main]
@@ -17,222 +12,65 @@ on:
 permissions:
   contents: read
 
-env:
-  # Oeffentliches Referenzziel. Der OWASP Juice Shop ist absichtlich
-  # verwundbar und dient hier als Scan-Objekt, nicht als eigener Code.
-  TARGET_IMAGE: bkimminich/juice-shop:latest
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  # ---------------------------------------------------------------------
-  # Secret Detection: prueft dieses Repo
-  # ---------------------------------------------------------------------
-  secret-detection:
-    name: Secret Detection (Gitleaks)
-    runs-on: ubuntu-latest
-
+  pipeline-tests:
+    name: Pipeline regression tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - name: Repository auschecken
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # Volle Historie. Ohne das sieht Gitleaks nur den letzten Commit,
-          # und ein Secret das vor zehn Commits entfernt wurde steht trotzdem
-          # noch in der Historie und ist weiterhin abrufbar.
+          persist-credentials: false
+      - name: Test failure handling and report contracts
+        run: python3 -m unittest discover -s tests -v
+
+  scan:
+    name: Scan (${{ matrix.scanner }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false # One failed scanner must not cancel the other reports.
+      matrix:
+        scanner: [gitleaks, semgrep, trivy, zap]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
           fetch-depth: 0
-
-      - name: Gitleaks über die Git-Historie laufen lassen
-        run: |
-          mkdir -p reports
-          docker run --rm \
-            -v "$PWD:/repo" \
-            ghcr.io/gitleaks/gitleaks:latest \
-            git /repo \
-            --report-format json \
-            --report-path /repo/reports/gitleaks-report.json \
-            --redact \
-            --verbose \
-            --exit-code 1
-
-      - name: Report als Artefakt sichern
+          persist-credentials: false
+      - name: Verify real Semgrep exit-code and report behavior
+        if: matrix.scanner == 'semgrep'
+        run: python3 scripts/verify_semgrep_contract.py
+      - name: Run scanner and require a complete report
+        run: python3 scripts/scan.py "${{ matrix.scanner }}"
+      - name: Preserve reports and provenance, also on failure
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: gitleaks-report
-          path: reports/gitleaks-report.json
-          if-no-files-found: warn
+          name: ${{ matrix.scanner }}-report
+          path: reports/${{ matrix.scanner }}/
+          if-no-files-found: error
           retention-days: 30
 
-  # ---------------------------------------------------------------------
-  # SAST: prueft den Quellcode des Zielprojekts
-  # ---------------------------------------------------------------------
-  sast:
-    name: SAST (Semgrep)
-    runs-on: ubuntu-latest
-
+  security-checks:
+    # Configure a repository ruleset separately; this job alone does not protect main.
+    name: Security checks
+    if: always()
+    needs: [pipeline-tests, scan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
     steps:
-      - name: Quellcode des Scan-Ziels holen
-        uses: actions/checkout@v4
-        with:
-          repository: juice-shop/juice-shop
-          path: target-src
-          # Flacher Klon. Fuer statische Analyse zaehlt der aktuelle Stand,
-          # nicht die Historie. Das Repo hat ueber 20.000 Commits.
-          fetch-depth: 1
-
-      - name: Semgrep laufen lassen
+      - name: Require all tests and scanners to have succeeded
+        env:
+          TEST_RESULT: ${{ needs.pipeline-tests.result }}
+          SCAN_RESULT: ${{ needs.scan.result }}
         run: |
-          mkdir -p reports
-          docker run --rm \
-            -v "$PWD:/src" \
-            semgrep/semgrep:latest \
-            semgrep scan \
-              --config p/security-audit \
-              --config p/javascript \
-              --sarif \
-              --output /src/reports/semgrep.sarif \
-              --metrics off \
-              --no-git-ignore \
-              /src/target-src
-        # Der Juice Shop ist absichtlich verwundbar. Ein Fehlschlag hier waere
-        # das erwartete Ergebnis und keine Information, deshalb kein Gate.
-        continue-on-error: true
-
-      - name: Trefferzahl ausgeben
-        if: always()
-        run: |
-          if [ -f reports/semgrep.sarif ]; then
-            COUNT=$(python3 -c "import json,sys; d=json.load(open('reports/semgrep.sarif')); print(sum(len(r.get('results',[])) for r in d.get('runs',[])))")
-            echo "Semgrep-Findings: $COUNT" | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Kein SARIF-Report erzeugt" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Report als Artefakt sichern
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-sarif
-          path: reports/semgrep.sarif
-          if-no-files-found: warn
-          retention-days: 30
-
-  # ---------------------------------------------------------------------
-  # Container Scan: prueft das fertige Image des Zielprojekts
-  # ---------------------------------------------------------------------
-  container-scan:
-    name: Container Scan (Trivy)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Trivy gegen das Zielimage
-        run: |
-          mkdir -p reports
-          docker run --rm \
-            -v "$PWD/reports:/out" \
-            -v trivy-cache:/root/.cache \
-            aquasec/trivy:latest \
-            image "$TARGET_IMAGE" \
-            --format json \
-            --output /out/trivy-report.json \
-            --severity CRITICAL,HIGH,MEDIUM,LOW \
-            --scanners vuln \
-            --exit-code 0
-
-      - name: Zusammenfassung als Tabelle
-        run: |
-          docker run --rm \
-            -v trivy-cache:/root/.cache \
-            aquasec/trivy:latest \
-            image "$TARGET_IMAGE" \
-            --format table \
-            --severity CRITICAL,HIGH \
-            --scanners vuln \
-            --exit-code 0 | tee -a "$GITHUB_STEP_SUMMARY"
-
-      # Bewusst kein Gate auf dem Scan-Ziel.
-      #
-      # In der urspruenglichen Pipeline stand hier:
-      #   trivy image --pkg-types os --severity CRITICAL --ignore-unfixed --exit-code 1
-      #
-      # Das ergibt Sinn fuer Code, den man selbst kontrolliert und fixen kann.
-      # Auf einer absichtlich verwundbaren Referenzanwendung wuerde es die
-      # Pipeline dauerhaft rot faerben, ohne dass jemand etwas daran aendern
-      # koennte. Ein Gate, das immer ausloest, wird ignoriert und ist damit
-      # schlechter als keins. Die Trennung zwischen "absichtlich unsicher" und
-      # "unabsichtlich angreifbar" muss die Pipeline abbilden.
-
-      - name: Report als Artefakt sichern
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-report
-          path: reports/trivy-report.json
-          if-no-files-found: warn
-          retention-days: 30
-
-  # ---------------------------------------------------------------------
-  # DAST: prueft die laufende Anwendung von aussen
-  # ---------------------------------------------------------------------
-  dast:
-    name: DAST (OWASP ZAP Baseline)
-    runs-on: ubuntu-latest
-
-    # Kein "services:" Block. Die eigentlichen Job-Schritte laufen direkt auf
-    # dem Runner, ein per "docker run" gestarteter ZAP-Container haengt dann
-    # nicht automatisch im selben Netz wie ein Service-Container. Deshalb
-    # Netz, Ziel und Scanner von Hand aufsetzen. Das ist genau der Aufbau,
-    # der lokal getestet wurde.
-    steps:
-      - name: Netzwerk und Zielcontainer starten
-        run: |
-          docker network create zapnet
-          docker run -d --name juice-shop --network zapnet "$TARGET_IMAGE"
-
-      - name: Warten bis das Ziel antwortet
-        run: |
-          # Echter Health-Check statt blindem sleep. Startet der Container
-          # nicht, bricht der Schritt hier ehrlich ab, statt ZAP ins Leere
-          # scannen und einen leeren Report als Erfolg verkaufen zu lassen.
-          docker run --rm --network zapnet curlimages/curl:latest \
-            sh -c 'for i in $(seq 1 40); do
-                     if curl -sf -o /dev/null http://juice-shop:3000; then
-                       echo "Ziel erreichbar nach $((i*5))s"; exit 0;
-                     fi
-                     echo "noch nicht erreichbar ($i/40)"; sleep 5;
-                   done
-                   echo "FEHLER: Ziel nach 200s nicht erreichbar"; exit 1'
-
-      - name: ZAP Baseline Scan
-        run: |
-          mkdir -p reports
-          chmod 777 reports
-          # ZAP laeuft als non-root und schreibt nach /zap/wrk. Der Mount
-          # dorthin braucht deshalb Schreibrechte fuer beliebige UID.
-          # -I setzt den Exit-Code nicht auf Fehler, wenn nur Warnungen
-          # gefunden werden. Der Juice Shop ist absichtlich verwundbar,
-          # Warnungen sind hier das erwartete Ergebnis, kein Pipeline-Fehler.
-          docker run --rm --network zapnet \
-            -v "$PWD/reports:/zap/wrk:rw" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-              -t http://juice-shop:3000 \
-              -J zap-baseline.json \
-              -r zap-baseline.html \
-              -m 2 \
-              -I
-
-      - name: Aufräumen
-        if: always()
-        run: |
-          docker rm -f juice-shop || true
-          docker network rm zapnet || true
-
-      - name: Reports als Artefakt sichern
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-baseline-report
-          path: |
-            reports/zap-baseline.json
-            reports/zap-baseline.html
-          if-no-files-found: warn
-          retention-days: 30
+          test "$TEST_RESULT" = success
+          test "$SCAN_RESULT" = success

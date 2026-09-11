@@ -1,0 +1,178 @@
+{
+  "context": "Local Windows Docker Desktop verification; not a GitHub Actions run of these changes.",
+  "generated_at": "2026-09-11T14:19:52.428569+00:00",
+  "unit_tests": {
+    "count": 20,
+    "passed": true
+  },
+  "workflow_lint": {
+    "tool": "actionlint",
+    "version": "1.7.12",
+    "passed": true
+  },
+  "linux_permission_probe": {
+    "zap_uid": 1000,
+    "supplemental_gid": 1001,
+    "directory_mode": "0770",
+    "write_succeeded": true,
+    "gitleaks_nonroot_owned_repo_succeeded": true
+  },
+  "lock": {
+    "reviewed_at": "2026-09-11",
+    "platform": "linux/amd64",
+    "target": {
+      "image": "bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e",
+      "repository": "https://github.com/juice-shop/juice-shop.git",
+      "revision": "5658473cf8814459bf89000ce373b20ed0b4eb37"
+    },
+    "images": {
+      "gitleaks": "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+      "semgrep": "semgrep/semgrep@sha256:12672acdb0949e19f9f6a4c2b288edd0b404f268f0ca7738a2c06f372f50362e",
+      "trivy": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+      "zap": "ghcr.io/zaproxy/zaproxy@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef",
+      "curl": "curlimages/curl@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777"
+    },
+    "semgrep_rules": {
+      "repository": "https://github.com/semgrep/semgrep-rules.git",
+      "revision": "40b8c63f75dc7c22c8a77482d73bfb864b146f7e",
+      "directories": [
+        "javascript",
+        "typescript"
+      ]
+    },
+    "semgrep_excludes": [
+      "data/static/codefixes",
+      "test",
+      "tests",
+      ".git",
+      "node_modules",
+      "frontend/src/assets/private/three.js"
+    ]
+  },
+  "scans": [
+    {
+      "tool": "gitleaks",
+      "started_at": "2026-09-11T14:17:22.848826+00:00",
+      "finished_at": "2026-09-11T14:17:26.121710+00:00",
+      "status": "success",
+      "result": {
+        "findings": 0,
+        "scope": "history + current files"
+      },
+      "repository_commit": "c87252deb3e2f31a03f2d92c96b3c6bc89aa099f",
+      "worktree_dirty": true,
+      "implementation_sha256": {
+        "scripts/scan.py": "b7442c9538b5a095a758a82002f09626176955c7c1a8f6e09cdaf7c1e11e929e",
+        "scripts/validate_reports.py": "bace9a9fdd68d7936e2dce00223d3d0fa012763f73f0bb43329b3b2a48b36c05",
+        "config/scan-lock.json": "600e6bfdedf61857e6a003079fc50f7f16bac16a6a858896ecaa076f6f68c7da"
+      },
+      "report_sha256": {
+        "gitleaks-history.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "gitleaks-worktree.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      }
+    },
+    {
+      "tool": "semgrep",
+      "started_at": "2026-09-11T14:17:22.867185+00:00",
+      "finished_at": "2026-09-11T14:19:00.211198+00:00",
+      "status": "success",
+      "result": {
+        "findings": 76,
+        "files_scanned": 865,
+        "rules_in_report": 212
+      },
+      "repository_commit": "c87252deb3e2f31a03f2d92c96b3c6bc89aa099f",
+      "worktree_dirty": true,
+      "implementation_sha256": {
+        "scripts/scan.py": "b7442c9538b5a095a758a82002f09626176955c7c1a8f6e09cdaf7c1e11e929e",
+        "scripts/validate_reports.py": "bace9a9fdd68d7936e2dce00223d3d0fa012763f73f0bb43329b3b2a48b36c05",
+        "config/scan-lock.json": "600e6bfdedf61857e6a003079fc50f7f16bac16a6a858896ecaa076f6f68c7da"
+      },
+      "report_sha256": {
+        "semgrep.json": "eabeec234980cf63c37fde76067b08d5f96c377b762a5a32e86d1ff0ed3288e5",
+        "semgrep.sarif": "c1414ac52f15de136a232fc9b38f0f071c65f580b555924ac729e0925287345d",
+        "target.json": "2c547a48f697a290dbb3d35dd92a8eda130aaac1fa6079f1f44d0e4051929fed"
+      }
+    },
+    {
+      "tool": "trivy",
+      "started_at": "2026-09-11T14:17:22.876213+00:00",
+      "finished_at": "2026-09-11T14:17:52.736562+00:00",
+      "status": "success",
+      "result": {
+        "findings": 128,
+        "severity": {
+          "MEDIUM": 54,
+          "LOW": 20,
+          "UNKNOWN": 1,
+          "HIGH": 45,
+          "CRITICAL": 8
+        }
+      },
+      "repository_commit": "c87252deb3e2f31a03f2d92c96b3c6bc89aa099f",
+      "worktree_dirty": true,
+      "implementation_sha256": {
+        "scripts/scan.py": "b7442c9538b5a095a758a82002f09626176955c7c1a8f6e09cdaf7c1e11e929e",
+        "scripts/validate_reports.py": "bace9a9fdd68d7936e2dce00223d3d0fa012763f73f0bb43329b3b2a48b36c05",
+        "config/scan-lock.json": "600e6bfdedf61857e6a003079fc50f7f16bac16a6a858896ecaa076f6f68c7da"
+      },
+      "report_sha256": {
+        "target.json": "2c547a48f697a290dbb3d35dd92a8eda130aaac1fa6079f1f44d0e4051929fed",
+        "trivy-db.json": "6d41280bfca11b1ca689f4644e727f356cfc5a338917200f983b36785ee06bdb",
+        "trivy.json": "418ecc935f45fbc35dfb3da0c2d1f74b17c89f00cb3ebf84af5412bef7d583ea"
+      }
+    },
+    {
+      "tool": "zap",
+      "started_at": "2026-09-11T14:17:22.887922+00:00",
+      "finished_at": "2026-09-11T14:18:38.232905+00:00",
+      "status": "success",
+      "result": {
+        "findings": 11,
+        "scope": "unauthenticated passive baseline"
+      },
+      "repository_commit": "c87252deb3e2f31a03f2d92c96b3c6bc89aa099f",
+      "worktree_dirty": true,
+      "implementation_sha256": {
+        "scripts/scan.py": "b7442c9538b5a095a758a82002f09626176955c7c1a8f6e09cdaf7c1e11e929e",
+        "scripts/validate_reports.py": "bace9a9fdd68d7936e2dce00223d3d0fa012763f73f0bb43329b3b2a48b36c05",
+        "config/scan-lock.json": "600e6bfdedf61857e6a003079fc50f7f16bac16a6a858896ecaa076f6f68c7da"
+      },
+      "report_sha256": {
+        "target.json": "2c547a48f697a290dbb3d35dd92a8eda130aaac1fa6079f1f44d0e4051929fed",
+        "zap.html": "2d996f7d820486e5e43320deccddbc73bddb1614d1105f9a45f5869aec59b004",
+        "zap.json": "bfdbce1e547f7056c1b1a9f8c6c2d13f6e912b0120e1dd97af85fcd8c04aa10c"
+      }
+    }
+  ],
+  "semgrep_contract": {
+    "status": "success",
+    "image": "semgrep/semgrep@sha256:12672acdb0949e19f9f6a4c2b288edd0b404f268f0ca7738a2c06f372f50362e",
+    "cases": [
+      {
+        "case": "finding",
+        "exit_code": 0,
+        "findings": 1,
+        "files_scanned": 1,
+        "rules_in_report": 1
+      },
+      {
+        "case": "clean",
+        "exit_code": 0,
+        "findings": 0,
+        "files_scanned": 1,
+        "rules_in_report": 1
+      },
+      {
+        "case": "invalid-config",
+        "exit_code": 7,
+        "runner_rejected": true
+      }
+    ]
+  },
+  "limitations": [
+    "Uncommitted local implementation at verification time.",
+    "Artifacts remain local and ignored; hashes are identifiers, not signed attestations.",
+    "A GitHub run and enforced repository ruleset still need verification."
+  ]
+}

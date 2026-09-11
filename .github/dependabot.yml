@@ -1,0 +1,8 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Docker digests and source/rule revisions need paired, reviewed updates.
+    # See docs/maintenance.md; Dependabot does not update scan-lock.json.

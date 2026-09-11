@@ -1,78 +1,49 @@
 # Von GitLab CI zu GitHub Actions
 
-Das Original dieser Pipeline lief in einem selbst gehosteten GitLab an der Hochschule. Dieses Repo ist die nach GitHub Actions portierte Fassung. Die Notizen hier halten fest, was sich beim Umzug geändert hat und warum.
+Das Hochschulprojekt lief in einem selbst gehosteten GitLab. Der [redigierte historische Workflow](gitlab-ci.original.redacted.yml) ist ein Herkunftsbeleg, **keine Vorlage für eine gehärtete Produktionspipeline**. Platzhalter verbergen Betriebsadressen und Konten; `$SSH_PRIVATE_KEY` ist lediglich der Variablenname, kein veröffentlichter Schlüssel.
 
-> Der ursprüngliche `.gitlab-ci.yml` liegt redigiert unter [`gitlab-ci.original.redacted.yml`](gitlab-ci.original.redacted.yml). Interne IP-Adressen, der SSH-Schlüssel und die VM-Zugangsdaten sind durch Platzhalter ersetzt. Der Ablauf bleibt lesbar, die Betriebsinterna der Hochschule stehen nicht im Netz.
+## Was sich geändert hat
 
-## Die Begriffe zeigen auf dasselbe, heißen aber anders
+| Hochschulprojekt | Öffentliche Lab-Fassung |
+|---|---|
+| `stages` und `stage:` | unabhängige Scan-Matrix; Abhängigkeiten nur beim abschließenden Check |
+| Scanner-Aufrufe in `script:` | derselbe kleine Python-Runner lokal und in GitHub Actions |
+| selbst gebautes `image.tar` | öffentliches Zielimage per Digest, passender Quellcode per Commit |
+| Deployment per SSH auf Hochschul-VM | kurzlebiger Zielcontainer ohne veröffentlichten Host-Port |
+| DAST nach Deployment | Baseline direkt im temporären Docker-Netz |
+| `artifacts:` | gepinntes `actions/upload-artifact`, auch bei Fehlern |
+| teilweise `allow_failure` und `|| true` | Findings und technische Ausfälle getrennt behandeln |
+| veränderliche Image-Tags und Regeln | [Version-Lock](../config/scan-lock.json), geprüfte Updates |
+| grüne Jobs als einziges Signal | Negativtests, Pflichtreports, Scan-Metadaten und Sammelcheck |
 
-| GitLab CI | GitHub Actions | Anmerkung |
-|---|---|---|
-| `stages` mit `stage:` je Job | `jobs`, standardmäßig parallel | Actions kennt keine Stages. Reihenfolge entsteht nur über `needs`. |
-| `script:` | `steps:` mit `run:` | In Actions ist ein Schritt entweder ein `run` oder ein `uses`. |
-| eingebauter Docker-Executor, `image:` je Job | `runs-on: ubuntu-latest`, Container per `docker run` oder `uses` | Der GitLab-Runner startet den Job selbst im angegebenen Image. Der Actions-Runner ist eine volle Linux-VM, in der Docker bereitsteht. |
-| `artifacts:` | `actions/upload-artifact` | In GitLab reicht ein Schlüssel, in Actions ist es ein eigener Schritt. |
-| `only: - main` | `on: push: branches: [main]` | Auslöser stehen in Actions zentral oben, nicht pro Job. |
-| CI/CD-Variablen im Projekt | Secrets und Variablen im Repo | Konzeptgleich, andere Oberfläche. |
+Die grundlegenden Aufgaben der Scanner bleiben gleich. Ihre Argumente und ihre Fehlerpolitik sind aber **nicht unverändert**: Gitleaks redigiert und blockiert, Semgrep läuft strikt mit lokalen gepinnten Regeln, Trivy berichtet statt das Lab-Ziel zu blockieren und ZAP ignoriert nur die erwarteten Warnungs-Exitcodes über `-I`.
 
-## Was komplett wegfiel
+## Warum das Deployment entfällt
 
-Die Original-Pipeline hatte zwei Stufen, die dieses Repo nicht mehr braucht: `deploy_vm` und ein davon abhängiges `dast_zap_baseline`.
+Ein öffentliches Projekt kann durchaus mit eigenen Secrets deployen. Dieses Lab soll aber gerade ohne individuelle Infrastruktur und ohne Zugang zum Hochschulnetz nutzbar sein. Deshalb werden VM, SSH-Schlüssel und Deployment nicht durch neue Zugangsdaten ersetzt, sondern aus dem Scan-Aufbau entfernt.
 
-```yaml
-# Original, redigiert
-deploy_vm:
-  stage: deploy
-  script:
-    - echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/deploy.key
-    - scp image.tar $VM_USER@$VM_IP:~/image.tar
-    - ssh $VM_USER@$VM_IP "docker load -i ~/image.tar && docker run -d ..."
-  only:
-    - main
+Das zeigt Security-CI an einem Referenzziel. Es zeigt keinen produktiven Releaseprozess und keine Absicherung einer realen Deployment-Umgebung.
 
-dast_zap_baseline:
-  stage: dast-scan
-  needs: [deploy_vm]
-  variables:
-    DAST_TARGET: "$DAST_TARGET_URL"   # zeigte auf eine interne VM-Adresse
-```
+## Container-Netzwerk: die tatsächliche Grenze
 
-Der Grund für den Wegfall steht im Haupt-README: ein öffentliches Repo hat keinen SSH-Schlüssel und keine Hochschul-VM. Statt die Anwendung irgendwohin zu deployen und dann deren Adresse zu scannen, startet der DAST-Job sie als eigenen Container im selben Docker-Netz und scannt sie dort. Damit verschwinden der Deploy-Schritt, der Schlüssel, die VM und jede Variable, die ein Geheimnis enthielt.
+GitHub-Service-Container sind **auch vom Host-Runner erreichbar**, wenn ihre Ports auf den Host gemappt werden. Läuft der Job selbst in einem Container, können Service-Namen direkt im gemeinsamen Netz verwendet werden. Ein zusätzlich per `docker run` gestarteter Scanner gehört aber nicht automatisch zu diesem Netz.
 
-Das ist keine Notlösung für GitHub. Es ist die sauberere Bauform, weil der Scan nichts über die Hochschulinfrastruktur mehr voraussetzt und bei jedem Fork ohne Einrichtung läuft.
+Hier werden Ziel und ZAP explizit demselben temporären Netz zugeordnet. Der Zielcontainer erhält den Alias `juice-shop`; kein Port wird auf den Host veröffentlicht. Das vereinfacht lokale Reproduktion und Cleanup, ist aber nicht die einzige mögliche Actions-Bauform. [GitHub-Dokumentation](https://docs.github.com/en/actions/tutorials/use-containerized-services/use-docker-service-containers)
 
-## Was fast unverändert blieb
+## Dateirechte und Aufräumen
 
-Die eigentlichen Scanner-Aufrufe. Trivy, Semgrep und ZAP werden in beiden Welten als Container gestartet und bekommen dieselben Argumente. Beispiel Trivy:
+ZAP behält seinen unprivilegierten Image-Benutzer. Das Report-Verzeichnis bekommt unter Linux Modus `0770`; der Container erhält die Host-Gruppe als zusätzliche Gruppe. So kann ZAP schreiben, ohne das Verzeichnis für alle Benutzer mit `0777` zu öffnen. Docker Desktop bildet Windows-Bind-Mount-Rechte anders ab; beide Laufumgebungen müssen geprüft werden.
 
-```yaml
-# GitLab
-container-scan-trivy:
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
-  script:
-    - trivy image --input image.tar --format json --output reports/trivy-report.json ...
-```
+Container, Netzwerke und Trivy-Cache-Volumes haben pro Lauf eindeutige Namen. Der Runner räumt nur diese Ressourcen im `finally`-Block auf, auch bei Scanfehlern und Prozess-Timeouts. Ein hart beendeter lokaler Python-Prozess kann trotzdem Ressourcen hinterlassen. Es gibt bewusst kein globales `docker system prune`.
 
-```yaml
-# GitHub Actions
-- name: Trivy gegen das Zielimage
-  run: |
-    docker run --rm -v "$PWD/reports:/out" aquasec/trivy:latest \
-      image "$TARGET_IMAGE" --format json --output /out/trivy-report.json ...
-```
+## Warum ein Health-Check sinnvoll bleibt
 
-Der Unterschied ist der Rahmen, nicht der Scan. GitLab hängt den Runner-Prozess direkt ins Trivy-Image, unter Actions ruft ein Schritt Trivy per `docker run` auf. Das Ergebnis ist dasselbe.
+ZAP hat eigene technische Fehlercodes. Die Behauptung „ein unerreichbares Ziel führt automatisch zu einem erfolgreichen leeren Scan“ wäre falsch. Der zusätzliche HTTP-Check liefert stattdessen eine frühere, klarere Fehlermeldung.
 
-## Zwei Fallen, die erst auf dem Runner auffallen
+Connect-Timeout, Request-Timeout, Retry-Zeitbudget und Prozess-Timeout begrenzen das Warten. ZAP hat zusätzlich ein Start-/Passive-Scan-Zeitlimit und ein Prozesslimit; der Actions-Job ist ebenfalls begrenzt. [ZAP-Exitcodes und Optionen](https://www.zaproxy.org/docs/docker/baseline-scan/)
 
-**Der Service-Container hängt nicht automatisch im richtigen Netz.** GitHub Actions bietet einen `services:`-Block für Begleitcontainer. Der ist aber nur aus Schritten erreichbar, die selbst im Job-Container laufen. Die Schritte hier laufen direkt auf der Runner-VM, und ein per `docker run` gestarteter ZAP-Container liegt dann in einem anderen Netz als der Service. Deshalb erstellt der DAST-Job Netz, Ziel und Scanner von Hand, statt `services:` zu benutzen.
+## Historische Muster nicht übernehmen
 
-**ZAP läuft als non-root.** Das offizielle Image schreibt seine Reports nach `/zap/wrk` unter einem unprivilegierten Benutzer. Ohne Schreibrechte auf dem gemounteten Verzeichnis bricht der Scan beim Speichern ab, und zwar erst am Ende, nachdem er schon gelaufen ist. Ein `chmod 777` auf das Report-Verzeichnis vor dem Lauf löst das.
+Im redigierten Original bleiben beispielsweise `allow_failure: true`, `|| true`, `sleep 15`, ein OS-only-Gate und das VM-Deployment sichtbar. Diese Zeilen dokumentieren den damaligen Aufbau. Insbesondere pauschales Ignorieren von Scannerfehlern ist nicht die heutige Fehlerpolitik.
 
-Beide Punkte kosten auf einem echten Runner sonst einen roten Lauf pro Erkenntnis. Deshalb wurde die komplette Kette vor dem ersten Push lokal mit Docker durchgespielt.
-
-## Was ich dabei gelernt habe
-
-Eine Pipeline zu portieren ist nicht Suchen und Ersetzen. Die Scanner-Aufrufe sind das Einfache. Die Arbeit steckt im Ausführungsmodell: wie ein Runner an Container kommt, in welchem Netz die stehen und unter welchem Benutzer sie schreiben. Wer das versteht, kann eine Pipeline zwischen den Systemen bewegen, ohne blind Vorlagen zu kopieren.
+Der nächste Qualitätsnachweis ist nicht ein fünfter Scanner, sondern der [Regressionstest für einen ausgefallenen Scanner](case-study-fail-closed.md).

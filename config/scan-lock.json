@@ -1,0 +1,32 @@
+{
+  "reviewed_at": "2026-09-11",
+  "platform": "linux/amd64",
+  "target": {
+    "image": "bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e",
+    "repository": "https://github.com/juice-shop/juice-shop.git",
+    "revision": "5658473cf8814459bf89000ce373b20ed0b4eb37"
+  },
+  "images": {
+    "gitleaks": "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+    "semgrep": "semgrep/semgrep@sha256:12672acdb0949e19f9f6a4c2b288edd0b404f268f0ca7738a2c06f372f50362e",
+    "trivy": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "zap": "ghcr.io/zaproxy/zaproxy@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef",
+    "curl": "curlimages/curl@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777"
+  },
+  "semgrep_rules": {
+    "repository": "https://github.com/semgrep/semgrep-rules.git",
+    "revision": "40b8c63f75dc7c22c8a77482d73bfb864b146f7e",
+    "directories": [
+      "javascript",
+      "typescript"
+    ]
+  },
+  "semgrep_excludes": [
+    "data/static/codefixes",
+    "test",
+    "tests",
+    ".git",
+    "node_modules",
+    "frontend/src/assets/private/three.js"
+  ]
+}

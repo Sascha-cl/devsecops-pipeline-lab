@@ -1,6 +1,8 @@
 # Scan-Ergebnisse werden als CI-Artefakte veröffentlicht, nicht eingecheckt.
 # Grund steht im README unter "Warum die Reports nicht im Repo liegen".
 reports/
+__pycache__/
+*.py[cod]
 *.sarif
 zap-*.json
 zap-*.html
