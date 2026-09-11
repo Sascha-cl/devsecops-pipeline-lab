@@ -183,13 +183,19 @@ Drei Blickwinkel auf dieselbe Komponente:
 
 Ein Scanner allein liefert eine Zeile. Erst die Kombination ergibt eine Spur: eine Datei, die statisch verdächtig ist, im Betrieb Interna leakt und zu einer Angriffsklasse gehört, die ich selbst durchgespielt habe. Diese Findings zu verbinden ist die Arbeit, die kein einzelnes Werkzeug abnimmt.
 
+## Portiert von GitLab CI
+
+Das Original lief in einem selbst gehosteten GitLab an der Hochschule. Beim Umzug nach GitHub Actions fielen die beiden Stufen weg, die eine Hochschul-VM voraussetzten, `deploy_vm` und das davon abhängige DAST. Die Scanner-Aufrufe blieben nahezu gleich, geändert hat sich der Rahmen: Actions kennt keine Stages, ein Service-Container hängt nicht von allein im richtigen Netz, und ZAP schreibt als non-root nur mit passenden Rechten.
+
+Der ausführliche Vergleich, die beiden Runner-Fallen und der redigierte Original-`.gitlab-ci.yml` liegen unter [docs/portierung-gitlab-zu-github-actions.md](docs/portierung-gitlab-zu-github-actions.md).
+
 ## Fahrplan
 
 - [x] Repo, Lizenz, Secret Detection mit Gitleaks
 - [x] Semgrep gegen den Quellcode des Scan-Ziels
 - [x] Trivy gegen das Container-Image, mit Auswertung statt Gate
 - [x] ZAP-Baseline gegen den laufenden Container
-- [ ] Vergleich GitLab CI gegen GitHub Actions als eigener Abschnitt
+- [x] Vergleich GitLab CI gegen GitHub Actions als eigener Abschnitt
 
 ## Lizenz
 

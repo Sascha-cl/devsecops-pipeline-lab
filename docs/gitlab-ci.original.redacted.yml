@@ -1,0 +1,172 @@
+# -----------------------------------------------------------------------------
+# REDIGIERTE FASSUNG der urspruenglichen .gitlab-ci.yml (Hochschulprojekt).
+#
+# Diese Datei laeuft nicht. Sie dient nur als Beleg, wie die Pipeline im
+# GitLab der Hochschule aufgebaut war, bevor sie nach GitHub Actions portiert
+# wurde. Alle Betriebsinterna sind durch Platzhalter ersetzt:
+#
+#   <VM_IP>            interne IP-Adresse der Deploy-VM
+#   <VM_USER>          Benutzer auf der VM
+#   $SSH_PRIVATE_KEY   privater Deploy-Schluessel (CI/CD-Variable)
+#   <DAST_TARGET_URL>  interne URL der laufenden Anwendung
+#
+# Die lauffaehige, bereinigte Fassung ist .github/workflows/security-pipeline.yml
+# im Wurzelverzeichnis.
+# -----------------------------------------------------------------------------
+
+stages:
+  - package
+  - build-image
+  - container-scan
+  - sast
+  - fuzzing
+  - deploy
+  - dast-scan
+
+package_juice_shop:
+  stage: package
+  image: node:22
+  script:
+    - npm install --unsafe-perm
+    - npm run package:ci
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+
+build-image:
+  stage: build-image
+  image: docker:29
+  needs:
+    - package_juice_shop
+  script:
+    - docker build -t juice-shop:$CI_COMMIT_SHORT_SHA .
+    - docker save juice-shop:$CI_COMMIT_SHORT_SHA -o image.tar
+  artifacts:
+    paths:
+      - image.tar
+    expire_in: 1 hour
+
+container-scan-trivy:
+  stage: container-scan
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  needs:
+    - build-image
+  script:
+    - mkdir -p reports
+    - trivy image --input image.tar --format json --output reports/trivy-report.json --severity CRITICAL,HIGH,MEDIUM,LOW --exit-code 0
+    - trivy image --input image.tar --format table --severity CRITICAL,HIGH --exit-code 0
+    # Gate nur auf OS-Ebene. Die Grenze dieses Gates ist im Haupt-README beschrieben.
+    - trivy image --input image.tar --pkg-types os --severity CRITICAL --ignore-unfixed --exit-code 1
+  artifacts:
+    when: always
+    paths:
+      - reports/trivy-report.json
+    expire_in: 1 week
+
+sast_semgrep:
+  stage: sast
+  image:
+    name: semgrep/semgrep:latest
+    entrypoint: [""]
+  script:
+    - mkdir -p reports
+    - semgrep scan --config auto --sarif --output reports/semgrep.sarif .
+  allow_failure: true
+  artifacts:
+    when: always
+    reports:
+      sast: reports/semgrep.sarif
+    paths:
+      - reports/semgrep.sarif
+    expire_in: 1 week
+
+secret_detection_gitleaks:
+  stage: sast
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  script:
+    - mkdir -p reports
+    - gitleaks detect --source . --report-format json --report-path reports/gitleaks-report.json --exit-code 1
+  allow_failure: true
+  artifacts:
+    when: always
+    paths:
+      - reports/gitleaks-report.json
+    expire_in: 1 week
+
+zap_active_fuzzing:
+  stage: fuzzing
+  image:
+    name: ghcr.io/zaproxy/zaproxy:stable
+    entrypoint: [""]
+  services:
+    - name: bkimminich/juice-shop:latest
+      alias: juice-shop-app
+  allow_failure: true
+  script:
+    - sleep 15
+    - mkdir -p reports /zap/wrk
+    - /zap/zap-full-scan.py -t http://juice-shop-app:3000 -J zap-fuzzing-report.json -r zap-fuzzing-report.html -m 2 || true
+    - cp /zap/wrk/zap-fuzzing-report.* reports/ 2>/dev/null || true
+  artifacts:
+    when: always
+    paths:
+      - reports/zap-fuzzing-report.json
+      - reports/zap-fuzzing-report.html
+    expire_in: 1 week
+
+# --- Ab hier die beiden Stufen, die in der GitHub-Fassung wegfielen. ---
+
+deploy_vm:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/deploy.key
+    - chmod 600 ~/.ssh/deploy.key
+    - eval $(ssh-agent -s) && ssh-add ~/.ssh/deploy.key
+    - ssh-keyscan -H <VM_IP> >> ~/.ssh/known_hosts
+  script:
+    - scp image.tar <VM_USER>@<VM_IP>:~/image.tar
+    - scp reports/*.json reports/*.sarif <VM_USER>@<VM_IP>:~/vulnerability-dashboard/reports/ || true
+    - ssh <VM_USER>@<VM_IP> "
+        docker stop juice-shop 2>/dev/null || true ;
+        docker rm juice-shop 2>/dev/null || true ;
+        docker load -i ~/image.tar ;
+        docker run -d -p 3000:3000 --name juice-shop juice-shop:$CI_COMMIT_SHORT_SHA ;
+        rm ~/image.tar
+      "
+  only:
+    - main
+
+dast_zap_baseline:
+  stage: dast-scan
+  image:
+    name: ghcr.io/zaproxy/zaproxy:stable
+    entrypoint: [""]
+  needs:
+    - deploy_vm
+  variables:
+    DAST_TARGET: "<DAST_TARGET_URL>"
+  script:
+    # Echter Health-Check statt blindem sleep: warten bis das Ziel erreichbar
+    # ist. Schlaegt der Container nicht an, bricht der Job ehrlich ab, statt
+    # einen leeren Scan gruen zu faken.
+    - |
+      for i in $(seq 1 30); do
+        if curl -sf -o /dev/null "$DAST_TARGET"; then break; fi
+        if [ "$i" -eq 30 ]; then echo "Ziel nicht erreichbar"; exit 1; fi
+        sleep 10
+      done
+    - mkdir -p "$CI_PROJECT_DIR/reports" /zap/wrk
+    - /zap/zap-baseline.py -t "$DAST_TARGET" -J zap-baseline-report.json -r zap-baseline-report.html -m 2 -I || true
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    expire_in: 1 week
