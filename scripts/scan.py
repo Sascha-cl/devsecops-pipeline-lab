@@ -38,6 +38,29 @@ def load_lock(root):
     return lock
 
 
+def container_inputs(prefix):
+    """Temp directory whose contents a scanner container may read.
+
+    Containers run with --cap-drop ALL, so even uid 0 loses CAP_DAC_OVERRIDE and
+    obeys file modes. A default 0700 temp directory would deny every mounted read;
+    the supplemental host group (see Session.docker) needs r-x on it.
+    """
+    os.umask(0o022)  # Keep files written into the directory group-readable.
+    temporary = tempfile.TemporaryDirectory(prefix=prefix)
+    Path(temporary.name).chmod(0o750)
+    return temporary
+
+
+def report_directory(path):
+    """Output directory a non-root or capability-restricted container may write.
+
+    chmod after mkdir: a mode passed to mkdir is reduced by the umask (0770 -> 0750).
+    """
+    path.mkdir(parents=True, exist_ok=False)  # Never reuse stale success reports.
+    path.chmod(0o770)  # Supplemental host group gives the container write access on Linux.
+    return path
+
+
 class Session:
     def __init__(self, lock, output):
         self.lock, self.output = lock, output
@@ -99,7 +122,7 @@ def gitleaks(session, root):
 
 def semgrep(session, root):
     verify_target(session)
-    with tempfile.TemporaryDirectory(prefix="devsecops-inputs-") as temporary:
+    with container_inputs("devsecops-inputs-") as temporary:
         source, rules = Path(temporary) / "source", Path(temporary) / "rules"
         for item, destination in ((session.lock["target"], source), (session.lock["semgrep_rules"], rules)):
             checkout(item["repository"], item["revision"], destination)
@@ -153,9 +176,7 @@ SCANNERS = {"gitleaks": gitleaks, "semgrep": semgrep, "trivy": trivy, "zap": zap
 def execute(tool, root=ROOT):
     lock = load_lock(root)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-    output = root / "reports" / tool / stamp
-    output.mkdir(parents=True, exist_ok=False)  # Never reuse stale success reports.
-    output.chmod(0o770)  # Supplemental host group gives non-root ZAP write access on Linux.
+    output = report_directory(root / "reports" / tool / stamp)
     session = Session(lock, output)
     metadata = {"tool": tool, "started_at": datetime.now(timezone.utc).isoformat(), "lock": lock, "status": "failed"}
     metadata["implementation_sha256"] = {

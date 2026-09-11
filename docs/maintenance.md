@@ -38,6 +38,8 @@ Artefakte laufen nach 30 Tagen ab und sind keine vertrauliche Ablage. Dauerhafte
 
 Die Scans benötigen Netzwerkzugriff zu den öffentlichen Registries und Git-Repositories. Semgrep bekommt Ziel und Regeln read-only gemountet. Kein Scanner bekommt den Docker-Socket, privilegierten Modus oder ein schreibberechtigtes GitHub-Token.
 
+Alle Container laufen mit `--cap-drop ALL`. Damit verliert auch uid 0 `CAP_DAC_OVERRIDE` und unterliegt den normalen Dateirechten. Gemountete Eingaben brauchen deshalb `0750`, Report-Verzeichnisse `0770`, jeweils passend zur mit `--group-add` ergänzten Host-Gruppe (`scripts/scan.py`: `container_inputs`, `report_directory`). Zwei Fallen dabei: `tempfile.TemporaryDirectory()` legt `0700` an, und ein an `mkdir` übergebener Modus wird von der umask reduziert (`0770` → `0750`). Beides fällt lokal unter Docker Desktop nicht auf, weil Windows- und macOS-Bind-Mounts andere Rechte melden als ein Linux-Runner.
+
 Das Docker-Netz hat keinen veröffentlichten Ziel-Port, ist aber keine vollständige Netzwerk-Sandbox: ausgehender Verkehr ist nicht generell gesperrt. Das Lab ersetzt keine Härtung für fremde untrusted Workloads auf gemeinsam genutzten oder produktiven Runnern.
 
 Bei einem hart abgebrochenen lokalen Lauf nur die dazugehörigen Ressourcen mit Präfix `devsecops-lab-<run-id>` prüfen und gezielt entfernen. Keine globalen Cleanup-Befehle verwenden.

@@ -5,24 +5,21 @@ No internet targets or credentials are involved. Run after a scanner update.
 """
 
 import json
-import tempfile
 import uuid
 from pathlib import Path
 
-from scan import ROOT, Session, load_lock
+from scan import ROOT, Session, container_inputs, load_lock, report_directory
 from validate_reports import require, validate
 import subprocess
 
 
 def main():
     lock = load_lock(ROOT)
-    output = ROOT / "reports/semgrep" / ("contract-" + uuid.uuid4().hex[:12])
-    output.mkdir(parents=True)
-    output.chmod(0o770)
+    output = report_directory(ROOT / "reports/semgrep" / ("contract-" + uuid.uuid4().hex[:12]))
     session = Session(lock, output)
     summary = {"status": "failed", "image": lock["images"]["semgrep"], "cases": []}
     try:
-        with tempfile.TemporaryDirectory(prefix="devsecops-contract-") as temporary:
+        with container_inputs("devsecops-contract-") as temporary:
             source = Path(temporary)
             (source / "rule.yml").write_text(
                 "rules:\n  - id: lab-eval\n    languages: [javascript]\n"
@@ -30,8 +27,7 @@ def main():
                 "    pattern: eval($X)\n", encoding="utf-8")
             for case, code in (("finding", "eval(userInput);\n"), ("clean", "String(userInput);\n")):
                 (source / "app.js").write_text(code, encoding="utf-8")
-                result = output / case
-                result.mkdir(mode=0o770)
+                result = report_directory(output / case)
                 session.docker(lock["images"]["semgrep"],
                     ["semgrep", "scan", "--strict", "--metrics", "off", "--disable-version-check",
                      "--config", "/src/rule.yml", "--json", "--output", "/out/semgrep.json",

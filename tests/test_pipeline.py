@@ -4,6 +4,8 @@ import contextlib
 import copy
 import io
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -196,6 +198,26 @@ class ExecutionTests(unittest.TestCase):
                             scan.execute("semgrep", root)
             statuses = [json.loads(p.read_text())["status"] for p in (root / "reports").rglob("run.json")]
             self.assertEqual(sorted(statuses), ["failed", "failed", "success"])
+
+    @unittest.skipUnless(hasattr(os, "getgid"), "File modes only apply to POSIX hosts")
+    def test_mounted_paths_stay_usable_for_restricted_containers(self):
+        # --cap-drop ALL removes CAP_DAC_OVERRIDE, so even uid 0 obeys file modes.
+        # A 0700 temp dir denies mounted reads, an umask-reduced 0750 output dir denies writes.
+        previous = os.umask(0o077)
+        try:
+            with tempfile.TemporaryDirectory() as root:
+                report = scan.report_directory(Path(root) / "reports/semgrep/run")
+                self.assertEqual(stat.S_IMODE(report.stat().st_mode) & 0o070, 0o070)
+                with self.assertRaises(FileExistsError):
+                    scan.report_directory(report)
+            with scan.container_inputs("devsecops-test-") as temporary:
+                inputs = Path(temporary)
+                (inputs / "rule.yml").write_text("rules: []\n", encoding="utf-8")
+                self.assertEqual(stat.S_IMODE(inputs.stat().st_mode) & 0o050, 0o050)
+                self.assertEqual(stat.S_IMODE((inputs / "rule.yml").stat().st_mode) & 0o040, 0o040)
+            self.assertFalse(inputs.exists())
+        finally:
+            os.umask(previous)
 
     def test_pins_and_workflow_guardrails(self):
         lock = scan.load_lock(scan.ROOT)
