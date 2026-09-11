@@ -17,12 +17,12 @@ Die Original-Pipeline läuft außerhalb des Hochschulnetzes nicht. Sie deployt p
 
 ```yaml
 deploy_vm:
-  - echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/agilesec.key
+  - echo "$SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/deploy.key
   - scp image.tar $VM_USER@$VM_IP:~/image.tar
 
 dast_zap_baseline:
   needs: [deploy_vm]
-  DAST_TARGET: "$DAST_TARGET_URL_JUICESHOP"
+  DAST_TARGET: "$DAST_TARGET_URL"
 ```
 
 Ein öffentliches Repo kann weder den Key noch die VM haben. Eine Pipeline, die bei jedem Klon rot läuft, belegt gar nichts.
