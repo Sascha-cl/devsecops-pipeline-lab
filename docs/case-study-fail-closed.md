@@ -53,9 +53,42 @@ Der neue Runner beendete sich daraufhin mit **Exit 1** und speicherte den Lauf a
 
 Die große Drittbibliothek wurde anschließend als explizite, dokumentierte SAST-Scope-Ausnahme eingeordnet. Der erneute Lauf meldete 76 Findings, 865 gescannte Dateien und keine technischen Fehler. Das ist **keine Reparatur der Bibliothek** und keine Behauptung vollständiger Anwendungsabdeckung. Die Entscheidung steht in [findings.md](findings.md).
 
+## Lokal grün ist kein CI-Beweis
+
+Vor dem Push waren alle vier Scans, der Semgrep-Vertragstest und 20 Regressionstests lokal erfolgreich. Der erste GitHub-Lauf der gehärteten Fassung ([Run 34615142596](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34615142596)) scheiterte trotzdem, und zwar im Vertragstest vor dem eigentlichen Scan:
+
+```text
+Semgrep failed to set the safe.directory Git config option: [Errno 13] Permission denied: '/src'
+PermissionError: [Errno 13] Permission denied: '/src/rule.yml'
+```
+
+Prozess-Exit **2**, der Runner beendete sich mit **1**. Ursache war keine Scanner-Änderung, sondern das Zusammenspiel zweier eigener Entscheidungen:
+
+- Die Container laufen mit `--cap-drop ALL`. Damit verliert auch uid 0 `CAP_DAC_OVERRIDE` und unterliegt den normalen Dateirechten. Das Semgrep-Image setzt kein `USER`, arbeitete also als root ohne DAC-Umgehung.
+- `tempfile.TemporaryDirectory()` legt das gemountete Eingabeverzeichnis mit `0700` an, Eigentümer ist der Runner-User. Die per `--group-add` ergänzte Host-Gruppe hilft dort nicht, weil `0700` der Gruppe keine Rechte gibt.
+
+Nachgestellt mit einem Docker-Volume und einem Verzeichnis `1001:1001`:
+
+| Verzeichnis | Container | Zugriff | Ergebnis |
+|---|---|---|---|
+| `0700` | root, `--cap-drop ALL` | lesen | `Permission denied` |
+| `0750` | dito, `--group-add 1001` | lesen | erfolgreich |
+| `0750` | dito, `--group-add 1001` | schreiben | `Permission denied` |
+| `0770` | dito, `--group-add 1001` | schreiben | erfolgreich |
+
+Die letzten zwei Zeilen betreffen einen zweiten, noch unentdeckten Fehler derselben Klasse: Ein an `mkdir` übergebener Modus wird von der umask reduziert, `0770` also zu `0750`. Das Ausgabeverzeichnis des Vertragstests wäre damit unbeschreibbar gewesen — der nächste Fehlschlag direkt hinter dem ersten. In Python geprüft: `mkdir(mode=0o770)` ergibt `0o750`, `mkdir()` plus `chmod(0o770)` ergibt `0o770`.
+
+`container_inputs()` und `report_directory()` in [scan.py](../scripts/scan.py) setzen die Modi jetzt zentral per `chmod`, passend zur ergänzten Host-Gruppe. Der [Folgelauf](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34616453058) war grün: sechs Jobs, vier Artefakte, [Protokoll](evidence/ci-verification-2026-09-11.json).
+
+**Warum lokal nichts auffiel:** Bind-Mounts von Docker Desktop unter Windows und macOS melden andere Eigentümer und Rechte als ein Linux-Runner. Diese Fehlerklasse ist dort strukturell unsichtbar, nicht bloß unwahrscheinlich. Das [lokale Prüfprotokoll](evidence/local-verification-2026-09-11.json) enthält genau eine Rechteprobe, und die betraf die Schreibseite von ZAP; die Leseseite der gemounteten Eingaben war nicht geprüft.
+
+Zwei Regressionstests decken das jetzt ab: einer prüft die Modi unter erzwungener `umask 077`, der andere, dass der Runner die Capability-Flags überhaupt noch setzt. Der zweite Test existiert, weil die naheliegende Abkürzung gewesen wäre, `--cap-drop ALL` zu entfernen — das hätte das Symptom beseitigt und die Härtung aufgegeben. Die Suite wuchs damit von 20 auf 22 Tests. Ein Modus-Test auf einem Windows-Host bleibt allerdings wirkungslos und wird dort übersprungen; der belastbare Nachweis ist der grüne Runner-Lauf.
+
 ## Automatisierte Regression
 
-Am 11.09.2026 bestanden alle **20 Unit-/Regressionstests**; der Workflow war mit **actionlint 1.7.12** fehlerfrei. Die finalen vier lokalen Scannerläufe waren erfolgreich. Das [Prüfprotokoll](evidence/local-verification-2026-09-11.json) enthält die zugehörigen Fingerprints und die Ergebnisse des echten Semgrep-Vertragstests.
+Am 11.09.2026 bestanden alle **20 Unit-/Regressionstests** des damaligen Stands; die finalen vier lokalen Scannerläufe waren erfolgreich. Das [Prüfprotokoll](evidence/local-verification-2026-09-11.json) enthält die zugehörigen Fingerprints und die Ergebnisse des echten Semgrep-Vertragstests.
+
+**actionlint** prüfte den Workflow zunächst nur lokal in Version 1.7.12. Inzwischen läuft der Linter als Pipeline-Schritt mit einem per Digest festgelegten Image ([lint_workflows.py](../scripts/lint_workflows.py)), also unter derselben Regel wie die Scanner: eine einmalige lokale Prüfung ist keine laufende Kontrolle.
 
 [tests/test_pipeline.py](../tests/test_pipeline.py) prüft unter anderem:
 - echte nicht erfolgreiche Kindprozesse und Prozess-Timeouts,
@@ -66,7 +99,9 @@ Am 11.09.2026 bestanden alle **20 Unit-/Regressionstests**; der Workflow war mit
 - falsches ZAP-Ziel oder falschen Trivy-Image-Digest,
 - inkonsistente Quellcode-/Image-Revisionen,
 - alte erfolgreiche Reports neben einem neuen gescheiterten Lauf,
-- Mutable-Tags und zentrale Workflow-Schutzregeln.
+- Mutable-Tags und zentrale Workflow-Schutzregeln,
+- Dateimodi gemounteter Ein- und Ausgaben unter erzwungener umask,
+- die Capability- und Platform-Flags des Container-Aufrufs.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -76,6 +111,8 @@ Diese Tests verwenden bewusst synthetische Reports und Prozesse; sie simulieren 
 
 ## Aussage und Grenze
 
-Nachgewiesen ist lokal: **erwartete Findings dürfen passieren, technische Scanfehler dürfen keinen Erfolg vortäuschen**. Der Workflow hat zusätzlich einen gemeinsamen `Security checks`-Status. Ob dieser Merges tatsächlich verhindert, muss nach dem Push mit einem GitHub-Ruleset und einem Test-PR verifiziert werden.
+Nachgewiesen ist lokal und auf einem GitHub-Runner: **erwartete Findings dürfen passieren, technische Scanfehler dürfen keinen Erfolg vortäuschen**. Der zweite Nachweis ist dabei der wertvollere, weil er nicht geplant war: Ein echter Konfigurationsfehler wurde rot gemeldet statt durchgelassen.
+
+Der Workflow hat zusätzlich einen gemeinsamen `Security checks`-Status, der inzwischen grün gemeldet wird. Ob er Merges tatsächlich **verhindert**, ist damit nicht belegt; das erfordert ein GitHub-Ruleset und einen absichtlich fehlschlagenden Test-PR.
 
 Diese Fallstudie belegt eine Verbesserung am eigenen Pipeline-Code. Sie ersetzt nicht die noch ausstehende Anwendungs-Fallstudie mit manuell reproduzierter Schwachstelle und Patch.

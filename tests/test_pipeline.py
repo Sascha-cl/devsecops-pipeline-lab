@@ -219,10 +219,28 @@ class ExecutionTests(unittest.TestCase):
         finally:
             os.umask(previous)
 
+    def test_container_hardening_is_not_silently_dropped(self):
+        # Handing CAP_DAC_OVERRIDE back would "fix" file-mode errors the wrong way.
+        # container_inputs() and report_directory() exist so the caps stay dropped.
+        session = scan.Session(scan.load_lock(scan.ROOT), scan.ROOT)
+        image = "example@sha256:" + "0" * 64
+        with patch.object(scan, "run") as runner:
+            session.docker(image, ["scan", "/src"], ["--workdir", "/src"])
+        command = runner.call_args.args[0]
+        pairs = [command[index:index + 2] for index in range(len(command) - 1)]
+        for option in (["--cap-drop", "ALL"], ["--security-opt", "no-new-privileges"],
+                       ["--platform", "linux/amd64"], ["--workdir", "/src"],
+                       ["--group-add", str(os.getgid() if hasattr(os, "getgid") else 0)]):
+            self.assertIn(option, pairs)
+        self.assertEqual(command[:3], ["docker", "run", "--rm"])
+        self.assertEqual(command[-3:], [image, "scan", "/src"])  # Options precede the image.
+        self.assertIn(session.containers[0], command)  # Named, so cleanup stays targeted.
+
     def test_pins_and_workflow_guardrails(self):
         lock = scan.load_lock(scan.ROOT)
         self.assertEqual(len(lock["target"]["revision"]), 40)
         workflow = (scan.ROOT / ".github/workflows/security-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/lint_workflows.py", workflow)
         self.assertNotIn("continue-on-error:", workflow)
         self.assertIn("if-no-files-found: error", workflow)
         self.assertIn("fail-fast: false", workflow)

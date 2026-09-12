@@ -8,7 +8,7 @@ Alle Runtime-Pins stehen in [config/scan-lock.json](../config/scan-lock.json). E
 2. Gewünschten Image-Tag mit `docker buildx imagetools inspect <image:version>` auflösen; Digest prüfen und eintragen. Keine zufälligen Digests aus Drittquellen übernehmen.
 3. Bei einem Zielupdate auch den vollständigen Juice-Shop-Commit festlegen. Das Image-Label `org.opencontainers.image.revision` muss dazu passen; der Runner prüft dies. Ein Label beweist nicht, dass ein Image tatsächlich aus unverändertem Quellcode gebaut wurde.
 4. Den Semgrep-Regel-Commit unabhängig aktualisieren. Die Auswahl `javascript`/`typescript` sowie Scope-Ausschlüsse prüfen. Neue Regeln können Syntax-/Performance-Probleme sichtbar machen; nicht pauschal ignorieren.
-5. `python -m unittest discover -s tests -v` und alle vier lokalen Scans ausführen.
+5. `python -m unittest discover -s tests -v`, `python scripts/lint_workflows.py` und alle vier lokalen Scans ausführen.
 6. Neue Zahlen nur zusammen mit Datum, Ziel-Digest, Source-/Regel-Commit und Scanner-/DB-Stand dokumentieren. Frühere Messungen nicht stillschweigend überschreiben.
 7. Änderung als PR prüfen und den GitHub-Lauf abwarten.
 
