@@ -1,0 +1,53 @@
+{
+  "context": "First green GitHub Actions run of the hardened implementation. Scanner result numbers are deliberately absent: they live in the 30-day artifacts and are not extracted into this repository yet.",
+  "collected_from": "GitHub REST API, actions/runs and actions/artifacts",
+  "workflow_run": {
+    "id": 34616453058,
+    "url": "https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34616453058",
+    "head_sha": "f4e5b87cf7e4567b6d84ec2484a558cd6b81762d",
+    "run_attempt": 1,
+    "event": "push",
+    "branch": "main",
+    "runner_label": "ubuntu-24.04",
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-09-11T15:29:45Z",
+    "updated_at": "2026-09-11T15:31:56Z"
+  },
+  "previous_run": {
+    "id": 34615142596,
+    "head_sha": "30ecaaba5a5eac81d4d25bad824355183aa6723c",
+    "conclusion": "failure",
+    "failed_job": "Scan (semgrep)",
+    "cause": "Container without CAP_DAC_OVERRIDE could not read the 0700 input mount; see ../case-study-fail-closed.md"
+  },
+  "jobs": [
+    {"name": "Pipeline regression tests", "conclusion": "success", "duration_seconds": 4},
+    {"name": "Scan (gitleaks)", "conclusion": "success", "duration_seconds": 9},
+    {"name": "Scan (trivy)", "conclusion": "success", "duration_seconds": 24},
+    {"name": "Scan (semgrep)", "conclusion": "success", "duration_seconds": 65},
+    {"name": "Scan (zap)", "conclusion": "success", "duration_seconds": 120},
+    {"name": "Security checks", "conclusion": "success", "duration_seconds": 3}
+  ],
+  "artifacts": [
+    {"name": "gitleaks-report", "size_in_bytes": 1846, "sha256": "455496a997937cf10bde18a61c64c55e8e9af0e6d08da278fe115cfd529df04e"},
+    {"name": "semgrep-report", "size_in_bytes": 57922, "sha256": "6feee05b5c368ad0dcebef3127d63a555fe25c1ecab05a3c7bb2300550ac3f78"},
+    {"name": "trivy-report", "size_in_bytes": 115712, "sha256": "00176eee872b7ec7a939f8c61e26c916c3b270e8fd74d8a66d6991e3f2a37fc6"},
+    {"name": "zap-report", "size_in_bytes": 26381, "sha256": "5fcababe31c20918ca5002fc4147460335437a35ca7de2f3077db841b12d1ef0"}
+  ],
+  "artifacts_expire_at": "2026-10-11T15:31:45Z",
+  "implementation_sha256": {
+    "scripts/scan.py": "84bc2603360920097f179aad12454c1d4ab17c1252ac4ade1c9afdbd675bed4c",
+    "scripts/validate_reports.py": "bace9a9fdd68d7936e2dce00223d3d0fa012763f73f0bb43329b3b2a48b36c05",
+    "config/scan-lock.json": "600e6bfdedf61857e6a003079fc50f7f16bac16a6a858896ecaa076f6f68c7da"
+  },
+  "notes": [
+    "Implementation hashes are the committed blobs at f4e5b87; .gitattributes forces LF, so local and runner hashes are comparable.",
+    "CI job durations are shorter than the local Windows run. Bind-mount performance and runner bandwidth differ; duration is not a coverage statement."
+  ],
+  "limitations": [
+    "Artifact digests cover the uploaded zip files, not their individual reports, and are identifiers rather than signed attestations.",
+    "Findings per scanner are still only documented for the local runs in ../findings.md.",
+    "An enforced repository ruleset and a deliberately failing test pull request are still unverified."
+  ]
+}

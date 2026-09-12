@@ -4,7 +4,9 @@
 
 Die [lokale Verifikation](evidence/local-verification-2026-09-11.json) hält die finalen Scan-Zusammenfassungen, Zeitpunkte, Implementierungs- und Report-Hashes fest. Sie ist ein Prüfprotokoll, keine signierte Attestierung.
 
-Die ursprünglichen Zahlen stammen aus Scans mit veränderlichen Tags. Der [GitHub-Referenzlauf vom 11.09.2026](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34605150362) wurde vor der Härtung geprüft. Die folgenden neuen Messungen sind **lokale Docker-Läufe vom 11.09.2026**, nicht bereits ein GitHub-Lauf der neuen Fassung.
+Die ursprünglichen Zahlen stammen aus Scans mit veränderlichen Tags. Der [GitHub-Referenzlauf vom 11.09.2026](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34605150362) wurde vor der Härtung geprüft.
+
+Die folgenden Messungen sind **lokale Docker-Läufe vom 11.09.2026**. Die gehärtete Fassung lief am selben Tag auch auf GitHub grün ([Run 34616453058](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34616453058), [Protokoll](evidence/ci-verification-2026-09-11.json)); dessen Reports liegen als 30-Tage-Artefakte und sind hier **noch nicht ausgewertet**. Welchen Datenbankstand Trivy dort verwendet hat, steht in `trivy-db.json` des Artefakts; abweichende Zahlen sind zu erwarten, solange das nicht geprüft ist.
 
 Festgelegtes Ziel:
 - Image: `bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e`

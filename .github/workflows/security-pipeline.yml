@@ -31,6 +31,8 @@ jobs:
           persist-credentials: false
       - name: Test failure handling and report contracts
         run: python3 -m unittest discover -s tests -v
+      - name: Check this workflow with the pinned actionlint image
+        run: python3 scripts/lint_workflows.py
 
   scan:
     name: Scan (${{ matrix.scanner }})

@@ -12,7 +12,7 @@
 - [Workflow](.github/workflows/security-pipeline.yml) und [gemeinsamer Scan-Runner](scripts/scan.py)
 - [Fallstudie: ein grüner Job trotz kaputtem Scanner](docs/case-study-fail-closed.md)
 - [Findings einordnen: OS-Gate, SAST-Verdacht und DAST-Grenzen](docs/findings.md)
-- [Lokales Prüfprotokoll mit Report-Hashes](docs/evidence/local-verification-2026-09-11.json)
+- [Lokales Prüfprotokoll mit Report-Hashes](docs/evidence/local-verification-2026-09-11.json) und [CI-Protokoll des grünen Laufs](docs/evidence/ci-verification-2026-09-11.json)
 - [Portierung von GitLab CI](docs/portierung-gitlab-zu-github-actions.md)
 - [Versionen aktualisieren und Merge-Regeln einrichten](docs/maintenance.md)
 
@@ -38,7 +38,7 @@ Der erste Scan lädt Images und kann einige Minuten dauern. Auf Windows funktion
 
 Jeder Lauf erhält ein **neues** Verzeichnis unter `reports/<scanner>/<run-id>/`: Reports, Zusammenfassung und `run.json` mit Version-Pins, UTC-Zeit, Status, Repository-Commit und Kennzeichnung lokaler Änderungen. Trivy ergänzt seinen Datenbankstand; SAST, Trivy und ZAP prüfen die Revision des Zielimages. Alte Ergebnisse können einen neuen fehlgeschlagenen Lauf nicht grün machen.
 
-Auf GitHub: Fork erstellen, Actions bei Bedarf aktivieren, **Security Pipeline → Run workflow**. Ergebnisse stehen in der Job-Zusammenfassung und den Artefakten. Ein öffentlicher [Referenzlauf vor der Härtung](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34605150362) belegt den bisherigen CI-Betrieb; die aktuelle Implementierung muss nach ihrem Push erneut auf GitHub laufen.
+Auf GitHub: Fork erstellen, Actions bei Bedarf aktivieren, **Security Pipeline → Run workflow**. Ergebnisse stehen in der Job-Zusammenfassung und den Artefakten. Die gehärtete Fassung lief am 11.09.2026 als [Run 34616453058](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34616453058) grün durch: sechs Jobs, vier Artefakte, [Protokoll](docs/evidence/ci-verification-2026-09-11.json). Der [Lauf davor](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34615142596) war rot, obwohl lokal alles grün war; die Ursache steht in der [Fallstudie](docs/case-study-fail-closed.md).
 
 ## Architektur und Fehlerpolitik
 
@@ -93,7 +93,8 @@ Reports bleiben außerhalb der Versionskontrolle und werden 30 Tage als CI-Artef
 - ZAP: unauthentifizierte passive Baseline mit traditionellem Spider; keine vollständige SPA-, API-, Login- oder aktive Angriffstest-Abdeckung.
 - Ein SAST-Finding ist ein Prüfauftrag, kein bestätigter Exploit. PortSwigger-Übungserfahrung ersetzt keine Verifikation am konkreten Ziel.
 - Lokale Regressionstests simulieren Fehlerfälle; sie sind kein vollständiger Test aller Scanner-Interna.
-- Offen: GitHub-Lauf der gehärteten Fassung, verpflichtendes Ruleset und eine separate Anwendungs-Fallstudie mit reproduziertem Finding, Fix und erneutem Scan.
+- Ein grüner Lauf auf einem Windows-Host beweist nichts über einen Linux-Runner: Bind-Mount-Rechte unterscheiden sich, ein echter Fehler daraus ist in der [Fallstudie](docs/case-study-fail-closed.md) dokumentiert.
+- Offen: verpflichtendes Ruleset samt Test-PR, Auswertung der CI-Reports in [findings.md](docs/findings.md) und eine separate Anwendungs-Fallstudie mit reproduziertem Finding, Fix und erneutem Scan.
 
 ## Lizenz
 
