@@ -12,7 +12,7 @@
 - [Workflow](.github/workflows/security-pipeline.yml) und [gemeinsamer Scan-Runner](scripts/scan.py)
 - [Fallstudie: ein grüner Job trotz kaputtem Scanner](docs/case-study-fail-closed.md)
 - [Findings einordnen: OS-Gate, SAST-Verdacht und DAST-Grenzen](docs/findings.md)
-- [Lokales Prüfprotokoll mit Report-Hashes](docs/evidence/local-verification-2026-09-11.json) und [CI-Protokoll des grünen Laufs](docs/evidence/ci-verification-2026-09-11.json)
+- Prüfprotokolle mit Report-Hashes: [lokal](docs/evidence/local-verification-2026-09-11.json), [CI](docs/evidence/ci-verification-2026-09-12.json), [Merge-Gate](docs/evidence/merge-gate-proof-2026-09-12.json)
 - [Portierung von GitLab CI](docs/portierung-gitlab-zu-github-actions.md)
 - [Versionen aktualisieren und Merge-Regeln einrichten](docs/maintenance.md)
 
@@ -95,7 +95,7 @@ Reports bleiben außerhalb der Versionskontrolle und werden 30 Tage als CI-Artef
 - Lokale Regressionstests simulieren Fehlerfälle; sie sind kein vollständiger Test aller Scanner-Interna.
 - Ein grüner Lauf auf einem Windows-Host beweist nichts über einen Linux-Runner: Bind-Mount-Rechte unterscheiden sich, ein echter Fehler daraus ist in der [Fallstudie](docs/case-study-fail-closed.md) dokumentiert.
 - Die Report-Prüfung blockiert den Totalausfall der Abdeckung, nicht deren schleichenden Verlust: ein Exclude, das nur noch wenige Dateien übrig lässt, gilt weiterhin als gültiger Scan.
-- Offen: Auswertung der CI-Reports in [findings.md](docs/findings.md) und eine separate Anwendungs-Fallstudie mit reproduziertem Finding, Fix und erneutem Scan.
+- Offen: eine separate Anwendungs-Fallstudie mit reproduziertem Finding, Fix und erneutem Scan.
 
 ## Lizenz
 

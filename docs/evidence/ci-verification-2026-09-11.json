@@ -47,7 +47,7 @@
   ],
   "limitations": [
     "Artifact digests cover the uploaded zip files, not their individual reports, and are identifiers rather than signed attestations.",
-    "Findings per scanner are still only documented for the local runs in ../findings.md.",
+    "Findings per scanner were never extracted for this run; the artifacts were only downloaded for the later run of 2026-09-12, see ci-verification-2026-09-12.json.",
     "An enforced repository ruleset and a deliberately failing test pull request are still unverified."
   ]
 }

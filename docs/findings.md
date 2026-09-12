@@ -6,7 +6,15 @@ Die [lokale Verifikation](evidence/local-verification-2026-09-11.json) hält die
 
 Die ursprünglichen Zahlen stammen aus Scans mit veränderlichen Tags. Der [GitHub-Referenzlauf vom 11.09.2026](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34605150362) wurde vor der Härtung geprüft.
 
-Die folgenden Messungen sind **lokale Docker-Läufe vom 11.09.2026**. Die gehärtete Fassung lief am selben Tag auch auf GitHub grün ([Run 34616453058](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34616453058), [Protokoll](evidence/ci-verification-2026-09-11.json)); dessen Reports liegen als 30-Tage-Artefakte und sind hier **noch nicht ausgewertet**. Welchen Datenbankstand Trivy dort verwendet hat, steht in `trivy-db.json` des Artefakts; abweichende Zahlen sind zu erwarten, solange das nicht geprüft ist.
+Es gibt zwei ausgewertete Messreihen zum identischen Zielimage:
+
+| | lokal | CI |
+|---|---|---|
+| Datum | 11.09.2026 | 12.09.2026 |
+| Umgebung | Windows, Docker Desktop | `ubuntu-24.04`-Runner |
+| Lauf | [Prüfprotokoll](evidence/local-verification-2026-09-11.json) | [Run 34689400447](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34689400447), [Protokoll](evidence/ci-verification-2026-09-12.json) |
+
+Die CI-Zahlen unten sind aus den vier heruntergeladenen Report-Artefakten gelesen, nicht aus Job-Zusammenfassungen abgeschrieben. Die Artefakte verfallen am 12.10.2026; danach bleiben nur die Zahlen und Hashes im Protokoll. Der erste grüne Lauf der gehärteten Fassung ([Run 34616453058](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34616453058), [Protokoll](evidence/ci-verification-2026-09-11.json)) ist nur mit Job- und Artefakt-Metadaten dokumentiert.
 
 Festgelegtes Ziel:
 - Image: `bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e`
@@ -18,7 +26,7 @@ Scanner-Zahlen zählen je nach Format Regeln, Alert-Typen, Fundstellen oder Pake
 
 ## Trivy: ein OS-only-Gate übersieht Anwendungspakete
 
-Trivy 0.74.0, Debian 13.6, Datenbank `UpdatedAt: 2026-09-11T07:00:51.617232631Z`:
+Lokaler Lauf, Trivy 0.74.0, Debian 13.6, Datenbank `UpdatedAt: 2026-09-11T07:00:51.617232631Z`:
 
 | Ebene | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN | Gesamt |
 |---|---:|---:|---:|---:|---:|---:|
@@ -40,9 +48,40 @@ Das Lab dokumentiert die Findings statt Juice Shop bei jeder bekannten Schwachst
 
 Die acht kritischen Einträge sind zudem keine acht eindeutigen CVEs: Ein Advisory kann mehrere Paketversionen treffen. Die Scanner-Severity und eine angebotene Fix-Version allein belegen weder Erreichbarkeit noch Ausnutzbarkeit im Anwendungskontext.
 
+### Derselbe Image-Digest, ein Tag später
+
+Der CI-Lauf vom 12.09.2026 verwendete dasselbe Image, dieselbe Trivy-Version 0.74.0 und eine Datenbank mit `UpdatedAt: 2026-09-12T07:04:21.045373563Z`:
+
+| Ebene | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN | Gesamt |
+|---|---:|---:|---:|---:|---:|---:|
+| OS-Pakete | 0 | 1 | 17 | 13 | 0 | 31 |
+| npm-Pakete | 8 | 44 | 38 | 7 | 0 | 97 |
+| **Gesamt** | **8** | **45** | **55** | **20** | **0** | **128** |
+
+Die Menge der Einträge ist identisch: dieselben 128 Kombinationen aus CVE, Paket und Version. Genau eine Severity hat sich geändert — **CVE-2026-89092 in `libc6` 2.41-12+deb13u3** wechselte von `UNKNOWN` auf `MEDIUM`.
+
+Das ist die dokumentierte Eigenschaft dieses Aufbaus in konkreter Form: Der Image-Digest ist festgelegt, die Advisory-Datenbank bewusst nicht. Ein Vergleich zweier Messungen prüft daher nie nur die Software, sondern immer auch den Wissensstand über sie. Wer einen Zahlenvergleich als Fortschritt verkauft, muss den Datenbankstand mitliefern.
+
+Für eine Gate-Policy folgt daraus: Eine Schwelle auf `UNKNOWN` oder auf Severity-Grenzen kann durch ein Datenbank-Update ausgelöst werden, ohne dass sich am Artefakt etwas geändert hat.
+
 ## Semgrep: Scope und Einordnung
 
 Der neue lokale Lauf mit Semgrep **1.176.0** meldete **76 Findings**, davon **37 in routes/**, bei **865 gemeldeten gescannten Dateien**. Im SARIF stehen 212 Regeldefinitionen; die CLI nennt 211 ausgeführte Regeln. JSON und SARIF enthalten keine technischen Scanfehler.
+
+Der CI-Lauf lieferte dieselben Zahlen und dieselben Fundstellen: alle 76 Treffer stimmen in Regel-ID, Pfad und Zeile mit dem lokalen Lauf überein, ebenfalls 865 Dateien und 212 Regeldefinitionen. Für SAST ist das der erwartete Effekt der festgelegten Pins — gleicher Quellstand, gleicher Regel-Commit, gleiches Scanner-Image ergeben dasselbe Ergebnis auf einer anderen Plattform. Die Reproduzierbarkeit gilt hier also für den Scan, während die Trivy-Zahlen von einem externen Datenstand abhängen.
+
+Die Verteilung relativiert die Zahl 76 zusätzlich. Die häufigsten Regeln im CI-Report:
+
+| Regel | Treffer |
+|---|---:|
+| `missing-template-string-indicator` | 33 |
+| `html-in-template-string` | 6 |
+| `express-check-directory-listing` | 5 |
+| `express-res-sendfile` | 4 |
+| `detect-non-literal-regexp` | 2 |
+| `hardcoded-hmac-key` | 2 |
+
+**43 Prozent der Findings stammen aus einer einzigen Regel**, die ein fehlendes `$` in einem Template-String meldet. Das ist ein Korrektheits- und Robustheitshinweis, keine Schwachstellenklasse. Eine Findingzahl ohne Verteilung nach Regeln sagt daher wenig über die Sicherheitslage aus.
 
 Die früheren „11 Findings in routes/“ bezogen sich auf andere, veränderliche Registry-Packs. Sie sind nicht direkt mit diesem neuen Regelstand vergleichbar. Hier werden die Verzeichnisse `javascript` und `typescript` aus `semgrep/semgrep-rules` am Commit `40b8c63f75dc7c22c8a77482d73bfb864b146f7e` verwendet. Die Regeln werden nicht als eigener Code vendort oder neu lizenziert.
 
@@ -73,6 +112,8 @@ Der neue lokale Lauf mit ZAP 2.17.0 meldete:
 - 88 besuchte URLs im CLI-Lauf
 - `FAIL-NEW: 0, WARN-NEW: 8, PASS: 59`
 - 11 Alert-Objekte im JSON, weil einzelne Regeln mehrere Alert-Untertypen erzeugen
+
+Der CI-Lauf meldete ebenfalls 11 Alert-Objekte, mit identischen Plugin-IDs und Risikostufen. Unterschiedlich waren nur die Instanzzahlen der drei Caching-Alerts aus Plugin `10049`: 1, 2 und 5 Fundstellen statt lokal je 5. Die crawl-abhängige Seite schwankt also, die gemeldeten Alert-Typen blieben stabil. `FAIL-NEW`/`WARN-NEW`/`PASS` stehen nur in der CLI-Ausgabe und nicht im JSON; aus dem Artefakt allein sind sie deshalb nicht vergleichbar.
 
 Beispiele sind fehlende CSP-/Cross-Origin-Header, Hinweise auf JavaScript-Funktionen und Cache-Verhalten. `WARN` ist die konfigurierte Baseline-Behandlung, nicht automatisch eine hohe Vulnerability-Severity. `PASS` bedeutet nicht, dass die gesamte betreffende Schwachstellenklasse ausgeschlossen ist.
 
