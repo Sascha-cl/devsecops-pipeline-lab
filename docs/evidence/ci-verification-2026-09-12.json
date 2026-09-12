@@ -1,0 +1,117 @@
+{
+  "context": "Green GitHub Actions run on main after merging PR #3. Numbers and hashes were read from the four downloaded report artifacts, not retyped from the job summaries.",
+  "workflow_run": {
+    "id": 34689400447,
+    "url": "https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34689400447",
+    "head_sha": "1c7f382c3602bf96799822e1300b0c650682bb27",
+    "head_sha_short": "1c7f382",
+    "event": "push",
+    "branch": "main",
+    "runner_label": "ubuntu-24.04",
+    "conclusion": "success",
+    "created_at": "2026-09-12T10:48:13Z"
+  },
+  "target": {
+    "image": "bkimminich/juice-shop@sha256:73c53fbf442e8337b3ea3d98c7e8550308854701ebdfce4cc39768f36b75430e",
+    "image_id": "sha256:0cec496d878c6855a1c81694c9f91564082f418b84aece87538adb8850d2437e",
+    "revision_label": "5658473",
+    "source_revision": "5658473cf8814459bf89000ce373b20ed0b4eb37"
+  },
+  "implementation_sha256": {
+    "scripts/scan.py": "84bc2603360920097f179aad12454c1d4ab17c1252ac4ade1c9afdbd675bed4c",
+    "scripts/validate_reports.py": "bace9a9fdd68d7936e2dce00223d3d0fa012763f73f0bb43329b3b2a48b36c05",
+    "config/scan-lock.json": "226fe83244da95a233c4858d8bf5a65915691cfcdf1ebed559b088570abb18ff"
+  },
+  "scans": [
+    {
+      "tool": "gitleaks",
+      "started_at": "2026-09-12T10:48:17Z",
+      "finished_at": "2026-09-12T10:48:18Z",
+      "result": {"findings": 0, "scope": "history + current files"},
+      "report_sha256": {
+        "gitleaks-history.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "gitleaks-worktree.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      }
+    },
+    {
+      "tool": "semgrep",
+      "started_at": "2026-09-12T10:48:37Z",
+      "finished_at": "2026-09-12T10:49:15Z",
+      "result": {"findings": 76, "files_scanned": 865, "rules_in_report": 212},
+      "detail": {
+        "findings_in_routes": 37,
+        "json_errors": 0,
+        "identical_to_local_run": "same 76 (check_id, path, line) triples as the local run of 2026-09-11",
+        "top_rules": {
+          "missing-template-string-indicator": 33,
+          "html-in-template-string": 6,
+          "express-check-directory-listing": 5,
+          "express-res-sendfile": 4,
+          "detect-non-literal-regexp": 2,
+          "hardcoded-hmac-key": 2
+        }
+      },
+      "report_sha256": {
+        "semgrep.json": "f3df61fdbccb60cc672a055f38d72fa6b9e4898e6a89a5d62a4bbfd2dd096ce6",
+        "semgrep.sarif": "5292ff164ede269e8d93caf8cbe662156fb73e603dff5fe0048c21a1561a817f",
+        "target.json": "47a71b54169762ce367bae44eb71fbd01e5bafceda2d74aff28caa5ed642e4b1"
+      }
+    },
+    {
+      "tool": "trivy",
+      "started_at": "2026-09-12T10:48:20Z",
+      "finished_at": "2026-09-12T10:48:44Z",
+      "result": {"findings": 128, "severity": {"CRITICAL": 8, "HIGH": 45, "MEDIUM": 55, "LOW": 20}},
+      "detail": {
+        "trivy_version": "0.74.0",
+        "os": "debian 13.6",
+        "database_updated_at": "2026-09-12T07:04:21.045373563Z",
+        "database_downloaded_at": "2026-09-12T10:48:37.662202939Z",
+        "os_packages": {"HIGH": 1, "MEDIUM": 17, "LOW": 13, "total": 31},
+        "npm_packages": {"CRITICAL": 8, "HIGH": 44, "MEDIUM": 38, "LOW": 7, "total": 97},
+        "diff_against_local_run": "identical set of 128 (CVE, package, version) entries; exactly one severity change: CVE-2026-89092 in libc6 2.41-12+deb13u3 moved from UNKNOWN to MEDIUM with the newer database"
+      },
+      "report_sha256": {
+        "trivy.json": "96b0fd2b608c65ccad0e003782159c53b6e069e3f11b1d326b84aaffb7d8ef74",
+        "trivy-db.json": "e313cc5b4d6904d16d635b90a35606d89dafca95c2f7601b08dc1f77fb272f93",
+        "target.json": "47a71b54169762ce367bae44eb71fbd01e5bafceda2d74aff28caa5ed642e4b1"
+      }
+    },
+    {
+      "tool": "zap",
+      "started_at": "2026-09-12T10:48:17Z",
+      "finished_at": "2026-09-12T10:49:48Z",
+      "result": {"findings": 11, "scope": "unauthenticated passive baseline"},
+      "detail": {
+        "zap_version": "2.17.0",
+        "site": "http://juice-shop:3000",
+        "alert_plugin_ids_identical_to_local_run": true,
+        "instance_count_differences": "the three caching alerts of plugin 10049 reported 1/2/5 instances instead of 5/5/5 locally; alert types and risk levels are unchanged"
+      },
+      "report_sha256": {
+        "zap.json": "946f4ce580f9e99f0443afb477c2ae7bacd58e6e3e404bde72070131a4df9a24",
+        "zap.html": "9f110605178d18f39d4b905e80bbe72d29c3cc31110b2437f4357f5b485a7e28",
+        "target.json": "47a71b54169762ce367bae44eb71fbd01e5bafceda2d74aff28caa5ed642e4b1"
+      }
+    }
+  ],
+  "semgrep_contract": {
+    "cases": [
+      {"case": "finding", "exit_code": 0, "findings": 1, "files_scanned": 1, "rules_in_report": 1},
+      {"case": "clean", "exit_code": 0, "findings": 0, "files_scanned": 1, "rules_in_report": 1},
+      {"case": "invalid-config", "exit_code": 7, "runner_rejected": true}
+    ]
+  },
+  "artifact_sha256": {
+    "gitleaks-report.zip": "8fe4e9299b1b5f03e25b4eb4a1c44900ee33881df6a7bbcb2fb409245539dd45",
+    "semgrep-report.zip": "b60c43187d6443c362e681ec60044f6ba2a37b88ede0ef0f0c04d70ae8a58cec",
+    "trivy-report.zip": "8e6661d92218693fc555cdb6318b05ea276f5a7eb9ffcce78098a347346983bc",
+    "zap-report.zip": "d0e092189afdeb82877da03ca1cd44083e99d4f8d5637a12c9a468e7d010a34a"
+  },
+  "limitations": [
+    "Hashes identify the reports of this run; they are not signed attestations, and the reports themselves stay out of version control.",
+    "The artifacts expire on 2026-10-12. After that only these numbers and hashes remain.",
+    "Timestamps are the scan runner's own start and finish times, not the job durations of the runner VM.",
+    "Semgrep skip statistics (oversized files, semgrepignore) appear in the CLI output, not in the JSON report, and are therefore not part of this protocol."
+  ]
+}
