@@ -64,7 +64,7 @@ push / pull_request / Wochenplan / manuell
 | Zielcontainer nicht erreichbar | **Fehler** vor ZAP |
 | Fehlgeschlagener oder übersprungener Scanner/Testjob | Sammelcheck **nicht erfolgreich** |
 
-Die Matrix und die Tests laufen parallel. Nur der abschließende Check wartet auf beide. Ein tatsächlich verpflichtender Merge-Check erfordert zusätzlich ein GitHub-Ruleset; die YAML allein schützt `main` nicht.
+Die Matrix und die Tests laufen parallel. Nur der abschließende Check wartet auf beide. Ein tatsächlich verpflichtender Merge-Check erfordert zusätzlich ein GitHub-Ruleset; die YAML allein schützt `main` nicht. Für dieses Repository ist das Ruleset aktiv und mit einem absichtlich fehlschlagenden [Test-PR](https://github.com/Sascha-cl/devsecops-pipeline-lab/pull/4) geprüft: Semgrep meldete Erfolg bei null gescannten Dateien, die Report-Prüfung lehnte ab, der Merge war blockiert. Einzelheiten in [maintenance.md](docs/maintenance.md) und der [Fallstudie](docs/case-study-fail-closed.md).
 
 ## Was festgelegt ist — und was sich weiterhin ändert
 
@@ -94,7 +94,8 @@ Reports bleiben außerhalb der Versionskontrolle und werden 30 Tage als CI-Artef
 - Ein SAST-Finding ist ein Prüfauftrag, kein bestätigter Exploit. PortSwigger-Übungserfahrung ersetzt keine Verifikation am konkreten Ziel.
 - Lokale Regressionstests simulieren Fehlerfälle; sie sind kein vollständiger Test aller Scanner-Interna.
 - Ein grüner Lauf auf einem Windows-Host beweist nichts über einen Linux-Runner: Bind-Mount-Rechte unterscheiden sich, ein echter Fehler daraus ist in der [Fallstudie](docs/case-study-fail-closed.md) dokumentiert.
-- Offen: verpflichtendes Ruleset samt Test-PR, Auswertung der CI-Reports in [findings.md](docs/findings.md) und eine separate Anwendungs-Fallstudie mit reproduziertem Finding, Fix und erneutem Scan.
+- Die Report-Prüfung blockiert den Totalausfall der Abdeckung, nicht deren schleichenden Verlust: ein Exclude, das nur noch wenige Dateien übrig lässt, gilt weiterhin als gültiger Scan.
+- Offen: Auswertung der CI-Reports in [findings.md](docs/findings.md) und eine separate Anwendungs-Fallstudie mit reproduziertem Finding, Fix und erneutem Scan.
 
 ## Lizenz
 

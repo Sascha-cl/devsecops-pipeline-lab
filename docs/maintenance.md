@@ -16,15 +16,19 @@ Dependabot ist für GitHub Actions konfiguriert. Es aktualisiert **nicht** das e
 
 ## Pflichtcheck für main
 
-**Noch nicht durch Code aktiviert:** Der Workflow definiert `Security checks`, ein GitHub-Ruleset muss aber separat eingerichtet werden.
+Der Workflow definiert `Security checks`. Die YAML allein schützt `main` aber nicht: ohne Ruleset ist dieser Status nur ein Bericht. Für dieses Repository ist das Ruleset seit dem 12.09.2026 aktiv.
 
-Nach dem ersten erfolgreichen Lauf der neuen Fassung:
-- Ruleset für `main` aktivieren.
-- Pull Request vor dem Merge verlangen.
-- `Security checks` als erforderlichen Statuscheck auswählen.
-- Bypass-Rechte bewusst begrenzen; alte Scanner-Checknamen gegebenenfalls ersetzen.
+`security checks required`, Ziel Default-Branch:
+- Pull Request vor dem Merge, **0** erforderliche Approvals. Bei einem Einzelrepo sperrt sich der Autor mit 1 selbst aus, weil eigene PRs nicht freigegeben werden können.
+- `Security checks` als erforderlicher Statuscheck, gemeldet von GitHub Actions.
+- Keine Bypass-Actors. Anders als bei den klassischen Branch Protections sind Admins bei Rulesets nicht automatisch befreit, und genau das ist hier gewollt.
+- Löschung und Force-Push auf `main` blockiert.
 
-Danach einen Test-PR verwenden: Eine absichtlich fehlschlagende Regression darf nicht mergebar sein. Ein grüner lokaler Test beweist nicht, dass die Repository-Regel korrekt eingerichtet ist. Die genauen Möglichkeiten hängen von Repository-Sichtbarkeit, GitHub-Plan und Berechtigungen ab. [GitHub: Rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
+**Nachweis:** [PR #4](https://github.com/Sascha-cl/devsecops-pipeline-lab/pull/4) enthielt ein absichtlich zu breites Exclude-Pattern. Semgrep meldete Exit 0 und einen erfolgreichen Scan bei null gescannten Dateien, die Report-Prüfung lehnte ab, `Security checks` wurde rot, der Merge war blockiert. Einordnung in der [Fallstudie](case-study-fail-closed.md), Belege in [merge-gate-proof-2026-09-12.json](evidence/merge-gate-proof-2026-09-12.json).
+
+Beim Nachbauen in einem Fork: Der Statuscheck erscheint in der Auswahlliste erst, nachdem er einmal gemeldet hat, alte Checknamen gegebenenfalls ersetzen. Die verfügbaren Möglichkeiten hängen von Repository-Sichtbarkeit, GitHub-Plan und Berechtigungen ab. [GitHub: Rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
+
+Zum Prüfen nicht das REST-Feld `mergeable_state` verwenden: es meldete hier `unstable` statt `blocked`, weil es älter als Rulesets ist. Ein grüner lokaler Test und ein plausibel aussehendes Ruleset beweisen ohnehin nichts; nachgewiesen ist die Regel erst durch einen tatsächlich nicht mergebaren PR.
 
 ## Artefakte und Grenzen der Reproduktion
 

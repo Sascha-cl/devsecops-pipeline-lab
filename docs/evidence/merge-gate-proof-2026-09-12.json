@@ -1,0 +1,59 @@
+{
+  "context": "Deliberately failing pull request, used to verify that the repository ruleset blocks a merge when Security checks is red. Synthetic configuration error, no live target and no credentials involved.",
+  "verified_at": "2026-09-12",
+  "ruleset": {
+    "id": 23037479,
+    "name": "security checks required",
+    "target": "branch",
+    "enforcement": "active",
+    "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+    "bypass_actors": [],
+    "rules": [
+      {"type": "pull_request", "required_approving_review_count": 0},
+      {"type": "required_status_checks", "strict_required_status_checks_policy": false,
+       "required_checks": [{"context": "Security checks", "integration_id": 15368}]},
+      {"type": "deletion"},
+      {"type": "non_fast_forward"}
+    ]
+  },
+  "pull_request": {
+    "number": 4,
+    "title": "NICHT MERGEN: absichtlich zu breites Exclude-Pattern",
+    "head_sha": "67de5005dcd61f3c11d6782113fec72646684e5c",
+    "base": "main",
+    "change": "one additional entry \"*\" in config/scan-lock.json semgrep_excludes",
+    "merged": false,
+    "closed_without_merging": true
+  },
+  "workflow_run": {
+    "id": 34689611041,
+    "url": "https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34689611041",
+    "event": "pull_request",
+    "created_at": "2026-09-12T10:53:07Z",
+    "conclusion": "failure",
+    "report_directory": "reports/semgrep/20260912T105332Z-1b8e5c42"
+  },
+  "check_runs": [
+    {"name": "Pipeline regression tests", "conclusion": "success"},
+    {"name": "Scan (gitleaks)", "conclusion": "success"},
+    {"name": "Scan (trivy)", "conclusion": "success"},
+    {"name": "Scan (zap)", "conclusion": "success"},
+    {"name": "Scan (semgrep)", "conclusion": "failure"},
+    {"name": "Security checks", "conclusion": "failure"}
+  ],
+  "log_evidence": {
+    "archive": "logs_93966548122.zip",
+    "archive_sha256": "4084054c553dfd904c8a7328c90c47802920d77e4553d55c7a5a2fe83a4c3668",
+    "archive_size_bytes": 92678,
+    "scanner_claim": "Scan (semgrep)/4_Run scanner and require a complete report.txt: \"Scanning 0 files with 212 Code rules: Nothing to scan.\" and \"Scan completed successfully. Targets scanned: 0\"",
+    "runner_verdict": "same file: \"SCAN FAILED: Semgrep scanned zero files\", process exit 1",
+    "collector_verdict": "Security checks/2_Require all tests and scanners to have succeeded.txt: TEST_RESULT: success, SCAN_RESULT: failure, exit 1"
+  },
+  "ui_verification": "Merge blocked in the GitHub pull request UI although the author holds admin rights and the ruleset grants no bypass. Confirmed manually; no screenshot is committed to this repository.",
+  "limitations": [
+    "The REST field mergeable_state reported \"unstable\" rather than \"blocked\". That field predates rulesets; the UI is authoritative.",
+    "Verified is a pattern that removes every target file. An exclude that only reduces coverage stays unnoticed as long as at least one file is scanned.",
+    "The log archive follows the repository log retention, the four report artifacts expire after 30 days.",
+    "Unit tests and load_lock() accepted the sabotaged lockfile; only the real report exposed it."
+  ]
+}

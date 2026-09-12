@@ -109,10 +109,43 @@ python -m unittest discover -s tests -v
 
 Diese Tests verwenden bewusst synthetische Reports und Prozesse; sie simulieren nicht alle internen Scannerfehler. Der zusätzliche Container-Integrationstest prüft den tatsächlichen Exit-/Report-Vertrag des gepinnten Semgrep-Images.
 
+## Nachweis, dass der Merge wirklich blockiert
+
+Ein grüner Sammelcheck beweist nur, dass er berichtet. Ob er auch blockiert, wurde am 12.09.2026 mit [PR #4](https://github.com/Sascha-cl/devsecops-pipeline-lab/pull/4) geprüft. Die Änderung war ein einziges zusätzliches Exclude-Pattern `"*"` in `config/scan-lock.json`.
+
+[Run 34689611041](https://github.com/Sascha-cl/devsecops-pipeline-lab/actions/runs/34689611041):
+
+```text
+Scanning 0 files with 212 Code rules:
+  Nothing to scan.
+✅ Scan completed successfully.
+ • Targets scanned: 0
+SCAN FAILED: Semgrep scanned zero files
+##[error]Process completed with exit code 1.
+```
+
+Semgrep hielt diesen Lauf für erfolgreich, inklusive grünem Häkchen. Die Report-Prüfung nicht.
+
+| Check | Ergebnis |
+|---|---|
+| Pipeline regression tests | grün |
+| Scan (gitleaks), Scan (trivy), Scan (zap) | grün |
+| Scan (semgrep) | rot |
+| Security checks | rot, `TEST_RESULT: success`, `SCAN_RESULT: failure` |
+
+Der Merge war anschließend in der Oberfläche blockiert, obwohl der Autor Repo-Admin ist und das Ruleset keine Bypass-Actors hat. Der PR wurde geschlossen, nicht gemergt. Belege in [merge-gate-proof-2026-09-12.json](evidence/merge-gate-proof-2026-09-12.json), Konfiguration in [maintenance.md](maintenance.md).
+
+Zwei Punkte daran sind wichtiger als das rote Kreuz:
+
+- Das Lockfile war syntaktisch gültig, `load_lock()` akzeptierte es, und alle 22 Regressionstests blieben grün. Synthetische Tests können diesen Fehler nicht fangen; erkennbar war er nur am echten Report.
+- Der Fehler ist realistisch. Ein zu breites Exclude beim Ausschließen einer einzelnen störenden Datei kostet die gesamte SAST-Abdeckung, ohne eine einzige Fehlermeldung zu erzeugen.
+
+**Grenze:** Geprüft ist ein Muster, das *alle* Zieldateien entfernt. Ein Exclude, das die Abdeckung nur stark reduziert, bleibt unauffällig, solange mindestens eine Datei gescannt wird. Gegen schleichenden Scope-Verlust hilft diese Prüfung nicht; dafür wäre eine begründete Untergrenze für die Dateizahl nötig.
+
 ## Aussage und Grenze
 
-Nachgewiesen ist lokal und auf einem GitHub-Runner: **erwartete Findings dürfen passieren, technische Scanfehler dürfen keinen Erfolg vortäuschen**. Der zweite Nachweis ist dabei der wertvollere, weil er nicht geplant war: Ein echter Konfigurationsfehler wurde rot gemeldet statt durchgelassen.
+Nachgewiesen ist lokal, auf einem GitHub-Runner und am Merge-Gate: **erwartete Findings dürfen passieren, technische Scanfehler und stillschweigend verlorene Abdeckung dürfen keinen Erfolg vortäuschen**. Der Runner-Nachweis ist dabei der wertvollere von den ersten beiden, weil er nicht geplant war: Ein echter Konfigurationsfehler wurde rot gemeldet statt durchgelassen.
 
-Der Workflow hat zusätzlich einen gemeinsamen `Security checks`-Status, der inzwischen grün gemeldet wird. Ob er Merges tatsächlich **verhindert**, ist damit nicht belegt; das erfordert ein GitHub-Ruleset und einen absichtlich fehlschlagenden Test-PR.
+Der gemeinsame `Security checks`-Status **verhindert** einen Merge inzwischen nachweislich, weil zusätzlich ein Ruleset auf `main` greift. Das gilt für dieses Repository und seinen aktuellen Regelstand, nicht automatisch für einen Fork: dort muss das Ruleset erneut eingerichtet und erneut mit einem fehlschlagenden PR geprüft werden.
 
 Diese Fallstudie belegt eine Verbesserung am eigenen Pipeline-Code. Sie ersetzt nicht die noch ausstehende Anwendungs-Fallstudie mit manuell reproduzierter Schwachstelle und Patch.
