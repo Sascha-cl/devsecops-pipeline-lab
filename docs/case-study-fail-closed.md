@@ -148,4 +148,4 @@ Nachgewiesen ist lokal, auf einem GitHub-Runner und am Merge-Gate: **erwartete F
 
 Der gemeinsame `Security checks`-Status **verhindert** einen Merge inzwischen nachweislich, weil zusätzlich ein Ruleset auf `main` greift. Das gilt für dieses Repository und seinen aktuellen Regelstand, nicht automatisch für einen Fork: dort muss das Ruleset erneut eingerichtet und erneut mit einem fehlschlagenden PR geprüft werden.
 
-Diese Fallstudie belegt eine Verbesserung am eigenen Pipeline-Code. Sie ersetzt nicht die noch ausstehende Anwendungs-Fallstudie mit manuell reproduzierter Schwachstelle und Patch.
+Diese Fallstudie belegt eine Verbesserung am eigenen Pipeline-Code. Die dazu ergänzende Anwendungs-Fallstudie mit manuell reproduzierter Schwachstelle, Fix und Nachtest steht in [was der `res.sendFile`-Verdacht am File-Server wirklich hergibt](case-study-fileserver.md).

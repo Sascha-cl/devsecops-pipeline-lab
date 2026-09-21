@@ -11,6 +11,7 @@
 
 - [Workflow](.github/workflows/security-pipeline.yml) und [gemeinsamer Scan-Runner](scripts/scan.py)
 - [Fallstudie: ein grüner Job trotz kaputtem Scanner](docs/case-study-fail-closed.md)
+- [Fallstudie: was der `res.sendFile`-Verdacht am File-Server wirklich hergibt](docs/case-study-fileserver.md)
 - [Findings einordnen: OS-Gate, SAST-Verdacht und DAST-Grenzen](docs/findings.md)
 - Prüfprotokolle mit Report-Hashes: [lokal](docs/evidence/local-verification-2026-09-11.json), [CI](docs/evidence/ci-verification-2026-09-12.json), [Merge-Gate](docs/evidence/merge-gate-proof-2026-09-12.json)
 - [Portierung von GitLab CI](docs/portierung-gitlab-zu-github-actions.md)
@@ -91,11 +92,11 @@ Reports bleiben außerhalb der Versionskontrolle und werden 30 Tage als CI-Artef
 ## Bewusste Grenzen und nächste Schritte
 
 - ZAP: unauthentifizierte passive Baseline mit traditionellem Spider; keine vollständige SPA-, API-, Login- oder aktive Angriffstest-Abdeckung.
-- Ein SAST-Finding ist ein Prüfauftrag, kein bestätigter Exploit. PortSwigger-Übungserfahrung ersetzt keine Verifikation am konkreten Ziel.
+- Ein SAST-Finding ist ein Prüfauftrag, kein bestätigter Exploit. Am `res.sendFile`-Verdacht ist das in der [File-Server-Fallstudie](docs/case-study-fileserver.md) durchgezogen: Traversal blockiert, Endungsfilter per Null-Byte umgehbar.
 - Lokale Regressionstests simulieren Fehlerfälle; sie sind kein vollständiger Test aller Scanner-Interna.
 - Ein grüner Lauf auf einem Windows-Host beweist nichts über einen Linux-Runner: Bind-Mount-Rechte unterscheiden sich, ein echter Fehler daraus ist in der [Fallstudie](docs/case-study-fail-closed.md) dokumentiert.
 - Die Report-Prüfung blockiert den Totalausfall der Abdeckung, nicht deren schleichenden Verlust: ein Exclude, das nur noch wenige Dateien übrig lässt, gilt weiterhin als gültiger Scan.
-- Offen: eine separate Anwendungs-Fallstudie mit reproduziertem Finding, Fix und erneutem Scan.
+- Erledigt: die Anwendungs-Fallstudie mit reproduziertem Finding, Fix und Nachtest — der `res.sendFile`-Verdacht ist am Ziel geklärt und in der [File-Server-Fallstudie](docs/case-study-fileserver.md) dokumentiert.
 
 ## Lizenz
 

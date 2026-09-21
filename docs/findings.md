@@ -92,7 +92,7 @@ Explizit außerhalb des SAST-Scopes:
 
 Zusätzlich gelten Semgreps Größenlimit und Ignore-Regeln aus dem festgelegten Zielstand. Der lokale Lauf meldete zwei zu große Dateien und zwei durch Semgrepignore ausgeschlossene Dateien. `--no-git-ignore` deaktiviert nicht alle anderen Filter. „Keine technischen Fehler“ bedeutet nicht „jede Zeile der Anwendung wurde geprüft“.
 
-### Beispiel: res.sendFile ist zunächst ein Prüfauftrag
+### Beispiel: res.sendFile — vom Prüfauftrag zum belegten Befund
 
 Vier Findings betreffen:
 - `routes/fileServer.ts:32`
@@ -100,11 +100,17 @@ Vier Findings betreffen:
 - `routes/logfileServer.ts:14`
 - `routes/quarantineServer.ts:14`
 
-Der Ausdruck `res.sendFile(path.resolve('ftp/', file))` verdient eine Prüfung. Vorher gibt es im [File-Server des festgelegten Zielstands](https://github.com/juice-shop/juice-shop/blob/5658473cf8814459bf89000ce373b20ed0b4eb37/routes/fileServer.ts) aber bereits eine Slash-Prüfung und Einschränkungen zulässiger Dateinamen beziehungsweise Endungen.
+Der Ausdruck `res.sendFile(path.resolve('<basis>/', file))` verdient eine Prüfung. Im [File-Server des festgelegten Zielstands](https://github.com/juice-shop/juice-shop/blob/5658473cf8814459bf89000ce373b20ed0b4eb37/routes/fileServer.ts) stehen davor eine Slash-Prüfung und eine `.md`/`.pdf`-Endungs-Allowlist.
 
-**Status: SAST-Verdacht, keine in diesem Repo bestätigte beliebige Dateileselücke.** Für einen belastbaren Befund müssten Parameterherkunft, Routing/Decoding, Filter, Betriebssystem und erreichbarer Dateizugriff geprüft werden. Ein reproduzierbarer Request/Response-Beleg fehlt hier bewusst noch.
+Dieser Verdacht ist am laufenden, per Digest festgelegten Container mit reproduzierbaren Requests geklärt worden. Kurzfassung:
 
-PortSwigger-Übungen zur gleichen Schwachstellenklasse helfen beim Verständnis. Ein anderswo gelöster Path-Traversal-Lab ist aber kein Beleg dafür, dass dieser konkrete Endpunkt mit derselben Eingabe ausnutzbar ist.
+- **Beliebiger Dateizugriff (Semgrep-Worst-Case, CWE-22): nicht reproduzierbar.** Acht Traversal-Varianten (prozentkodierte und literale `../`, bis `/etc/passwd`) enden auf allen vier Endpunkten mit `403`. Die kodierten Slashes werden bereits von der Express-/`send`-Ebene abgewiesen; die Einschränkung auf ein Verzeichnis hält.
+- **Endungs-Allowlist auf `/ftp/:file`: umgehbar (CWE-158, Poison Null Byte).** `GET /ftp/package.json.bak%2500.md` liefert `200` mit dem Entwickler-Backup, während `GET /ftp/package.json.bak` mit `403` abgewiesen wird. Ursache: Die Allowlist prüft den vorläufigen Namen, `cutOffPoisonNullByte` schneidet danach an der literalen Zeichenfolge `%00` ab.
+- **Die drei Geschwister-Endpunkte haben gar keinen Endungsfilter.** `GET /encryptionkeys/premium.key` liefert einen statischen Schlüssel im Klartext.
+
+**Status: bestätigte, aber verzeichnisbegrenzte Informationsoffenlegung — kein beliebiger Dateizugriff.** Der belastbare Beleg mit Request/Response, die Einordnung als absichtliche Juice-Shop-Challenges sowie ein Fix mit Nachtest in einem isolierten Harness stehen in der [Fallstudie zum File-Server](case-study-fileserver.md).
+
+PortSwigger-Übungen zur gleichen Schwachstellenklasse helfen beim Verständnis. Ein anderswo gelöster Path-Traversal-Lab ist aber kein Beleg dafür, dass dieser konkrete Endpunkt ausnutzbar ist — deshalb der Test am Ziel selbst.
 
 ## ZAP: passive Baseline, kein Exploit-Nachweis
 
